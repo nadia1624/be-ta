@@ -17,19 +17,9 @@ module.exports = (sequelize, DataTypes) => {
         sourceKey: 'tanggal',
         as: 'kehadiranPimpinans'
       });
-      SlotAgendaPimpinan.hasMany(models.KehadiranPimpinan, {
-        foreignKey: 'id_slot_waktu',
-        sourceKey: 'id_slot_waktu',
-        as: 'kehadiranPimpinans'
-      });
       SlotAgendaPimpinan.hasMany(models.SlotAgendaStaff, {
         foreignKey: 'tanggal',
         sourceKey: 'tanggal',
-        as: 'slotAgendaStaffs'
-      });
-      SlotAgendaPimpinan.hasMany(models.SlotAgendaStaff, {
-        foreignKey: 'id_slot_waktu',
-        sourceKey: 'id_slot_waktu',
         as: 'slotAgendaStaffs'
       });
     }

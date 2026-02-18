@@ -13,11 +13,6 @@ module.exports = (sequelize, DataTypes) => {
         targetKey: 'id_pimpinan',
         as: 'periodePimpinan'
       });
-      AgendaPimpinan.belongsTo(models.PeriodePimpinan, {
-        foreignKey: 'id_periode',
-        targetKey: 'id_periode',
-        as: 'periodePimpinan'
-      });
     }
   }
 

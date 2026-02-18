@@ -9,11 +9,6 @@ module.exports = (sequelize, DataTypes) => {
         targetKey: 'id_pimpinan',
         as: 'periodePimpinan'
       });
-      PimpinanAjudan.belongsTo(models.PeriodePimpinan, {
-        foreignKey: 'id_periode',
-        targetKey: 'id_periode',
-        as: 'periodePimpinan'
-      });
       PimpinanAjudan.belongsTo(models.User, {
         foreignKey: 'id_user_ajudan',
         as: 'ajudan'

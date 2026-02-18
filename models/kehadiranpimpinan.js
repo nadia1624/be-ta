@@ -9,19 +9,9 @@ module.exports = (sequelize, DataTypes) => {
         targetKey: 'tanggal',
         as: 'slotAgendaPimpinan'
       });
-      KehadiranPimpinan.belongsTo(models.SlotAgendaPimpinan, {
-        foreignKey: 'id_slot_waktu',
-        targetKey: 'id_slot_waktu',
-        as: 'slotAgendaPimpinan'
-      });
       KehadiranPimpinan.belongsTo(models.PeriodePimpinan, {
         foreignKey: 'id_pimpinan',
         targetKey: 'id_pimpinan',
-        as: 'periodePimpinan'
-      });
-      KehadiranPimpinan.belongsTo(models.PeriodePimpinan, {
-        foreignKey: 'id_periode',
-        targetKey: 'id_periode',
         as: 'periodePimpinan'
       });
     }

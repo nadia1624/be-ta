@@ -1,8 +1,11 @@
 'use strict';
+const bcrypt = require('bcryptjs');
 
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up (queryInterface, Sequelize) {
+    const hashedPassword = await bcrypt.hash('password123', 10);
+
     await queryInterface.bulkInsert('Users', [
       // Admin
       {
@@ -11,7 +14,7 @@ module.exports = {
         nama: 'Admin Sistem',
         nip: '199001012020011001',
         email: 'admin@pemkot.go.id',
-        password: 'admin123',
+        password: hashedPassword,
         instansi: 'Bagian Protokol dan Komunikasi Pimpinan',
         alamat: 'Jl. Balai Kota No. 1',
         no_hp: '081200000001',
@@ -28,7 +31,7 @@ module.exports = {
         nama: 'Sespri Walikota',
         nip: '199102022020012002',
         email: 'sespri@pemkot.go.id',
-        password: 'sespri123',
+        password: hashedPassword,
         instansi: 'Bagian Protokol dan Komunikasi Pimpinan',
         alamat: 'Jl. Balai Kota No. 1',
         no_hp: '081200000002',
@@ -45,7 +48,7 @@ module.exports = {
         nama: 'Kasubag Media',
         nip: '198803032019011003',
         email: 'kasubagmedia@pemkot.go.id',
-        password: 'kasubagmedia123',
+        password: hashedPassword,
         instansi: 'Bagian Protokol dan Komunikasi Pimpinan',
         alamat: 'Jl. Balai Kota No. 1',
         no_hp: '081200000003',
@@ -61,8 +64,8 @@ module.exports = {
         id_role: 'R004',
         nama: 'Kasubag Protokol',
         nip: '198704042019011004',
-        email: 'kasubagprotokolr@pemkot.go.id',
-        password: 'kasubagprotokol123',
+        email: 'kasubagprotokol@pemkot.go.id',
+        password: hashedPassword,
         instansi: 'Bagian Protokol dan Komunikasi Pimpinan',
         alamat: 'Jl. Balai Kota No. 1',
         no_hp: '081200000004',
@@ -79,7 +82,7 @@ module.exports = {
         nama: 'Ajudan Walikota',
         nip: '199505052021011005',
         email: 'ajudan@pemkot.go.id',
-        password: 'ajudan123',
+        password: hashedPassword,
         instansi: 'Bagian Protokol dan Komunikasi Pimpinan',
         alamat: 'Jl. Balai Kota No. 1',
         no_hp: '081200000005',
@@ -96,7 +99,7 @@ module.exports = {
         nama: 'Staff Media 1',
         nip: '199606062022011006',
         email: 'staffmedia1@pemkot.go.id',
-        password: 'staffmedia123',
+        password: hashedPassword,
         instansi: 'Bagian Protokol dan Komunikasi Pimpinan',
         alamat: 'Jl. Balai Kota No. 1',
         no_hp: '081200000006',
@@ -113,7 +116,7 @@ module.exports = {
         nama: 'Staff Protokol 1',
         nip: '199707072022011007',
         email: 'staffprotokol1@pemkot.go.id',
-        password: 'staffprotokol123',
+        password: hashedPassword,
         instansi: 'Bagian Protokol dan Komunikasi Pimpinan',
         alamat: 'Jl. Balai Kota No. 1',
         no_hp: '081200000007',
@@ -130,7 +133,7 @@ module.exports = {
         nama: 'Pemohon Demo',
         nip: null,
         email: 'pemohon@example.com',
-        password: 'pemohon123',
+        password: hashedPassword,
         instansi: 'Dinas Pendidikan',
         alamat: 'Jl. Pendidikan No. 10',
         no_hp: '081200000008',
