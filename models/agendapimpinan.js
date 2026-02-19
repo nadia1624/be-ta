@@ -8,10 +8,10 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'id_agenda',
         as: 'agenda'
       });
-      AgendaPimpinan.belongsTo(models.PeriodePimpinan, {
-        foreignKey: 'id_pimpinan',
-        targetKey: 'id_pimpinan',
-        as: 'periodePimpinan'
+      AgendaPimpinan.belongsTo(models.PeriodeJabatan, {
+        foreignKey: 'id_jabatan',
+        targetKey: 'id_jabatan',
+        as: 'periodeJabatan'
       });
     }
   }
@@ -26,13 +26,13 @@ module.exports = (sequelize, DataTypes) => {
         key: 'id_agenda'
       }
     },
-    id_pimpinan: {
+    id_jabatan: {
       type: DataTypes.STRING(10),
       allowNull: false,
       primaryKey: true,
       references: {
-        model: 'PeriodePimpinans',
-        key: 'id_pimpinan'
+        model: 'PeriodeJabatans',
+        key: 'id_jabatan'
       }
     },
     id_periode: {
@@ -40,7 +40,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       primaryKey: true,
       references: {
-        model: 'PeriodePimpinans',
+        model: 'PeriodeJabatans',
         key: 'id_periode'
       }
     },

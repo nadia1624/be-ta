@@ -2,14 +2,14 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('PeriodePimpinans', {
-      id_pimpinan: {
+    await queryInterface.createTable('PeriodeJabatans', {
+      id_jabatan: {
         type: Sequelize.STRING(10),
         allowNull: false,
         primaryKey: true,
         references: {
-          model: 'Pimpinans',
-          key: 'id_pimpinan'
+          model: 'JabatanPimpinans',
+          key: 'id_jabatan'
         },
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
@@ -25,12 +25,12 @@ module.exports = {
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
       },
-      id_jabatan: {
+      id_pimpinan: {
         type: Sequelize.STRING(10),
         allowNull: true,
         references: {
-          model: 'JabatanPimpinans',
-          key: 'id_jabatan'
+          model: 'Pimpinans',
+          key: 'id_pimpinan'
         },
         onUpdate: 'CASCADE',
         onDelete: 'SET NULL'
@@ -52,11 +52,11 @@ module.exports = {
     });
 
     // Tambahkan indexes
-    await queryInterface.addIndex('PeriodePimpinans', ['id_periode'], {
-      name: 'idx_periode_pimpinan_periode'
+    await queryInterface.addIndex('PeriodeJabatans', ['id_periode'], {
+      name: 'idx_periode_jabatan_periode'
     });
-    await queryInterface.addIndex('PeriodePimpinans', ['status_aktif'], {
-      name: 'idx_periode_pimpinan_status'
+    await queryInterface.addIndex('PeriodeJabatans', ['status_aktif'], {
+      name: 'idx_periode_jabatan_status'
     });
   },
 

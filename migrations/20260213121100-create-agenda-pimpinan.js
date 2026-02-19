@@ -15,7 +15,7 @@ module.exports = {
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
       },
-      id_pimpinan: {
+      id_jabatan: {
         type: Sequelize.STRING(10),
         allowNull: false,
         primaryKey: true
@@ -52,22 +52,22 @@ module.exports = {
       }
     });
 
-    // Composite FK: (id_pimpinan, id_periode) -> PeriodePimpinans
+    // Composite FK: (id_jabatan, id_periode) -> PeriodeJabatans
     await queryInterface.addConstraint('AgendaPimpinans', {
-      fields: ['id_pimpinan', 'id_periode'],
+      fields: ['id_jabatan', 'id_periode'],
       type: 'foreign key',
       name: 'fk_agenda_pimpinan_periode',
       references: {
-        table: 'PeriodePimpinans',
-        fields: ['id_pimpinan', 'id_periode']
+        table: 'PeriodeJabatans',
+        fields: ['id_jabatan', 'id_periode']
       },
       onUpdate: 'CASCADE',
       onDelete: 'CASCADE'
     });
 
     // Indexes
-    await queryInterface.addIndex('AgendaPimpinans', ['id_pimpinan'], {
-      name: 'idx_agenda_pimpinans_pimpinan'
+    await queryInterface.addIndex('AgendaPimpinans', ['id_jabatan'], {
+      name: 'idx_agenda_pimpinans_jabatan'
     });
     await queryInterface.addIndex('AgendaPimpinans', ['id_periode'], {
       name: 'idx_agenda_pimpinans_periode'

@@ -2,43 +2,43 @@
 const { Model } = require('sequelize');
 
 module.exports = (sequelize, DataTypes) => {
-  class PeriodePimpinan extends Model {
+  class PeriodeJabatan extends Model {
     static associate(models) {
-      PeriodePimpinan.belongsTo(models.Pimpinan, {
+      PeriodeJabatan.belongsTo(models.Pimpinan, {
         foreignKey: 'id_pimpinan',
         as: 'pimpinan'
       });
-      PeriodePimpinan.belongsTo(models.Periode, {
+      PeriodeJabatan.belongsTo(models.Periode, {
         foreignKey: 'id_periode',
         as: 'periode'
       });
-      PeriodePimpinan.belongsTo(models.JabatanPimpinan, {
+      PeriodeJabatan.belongsTo(models.JabatanPimpinan, {
         foreignKey: 'id_jabatan',
         as: 'jabatan'
       });
-      PeriodePimpinan.hasMany(models.KehadiranPimpinan, {
-        foreignKey: 'id_pimpinan',
+      PeriodeJabatan.hasMany(models.KehadiranPimpinan, {
+        foreignKey: 'id_jabatan',
         as: 'kehadiranPimpinans'
       });
-      PeriodePimpinan.hasMany(models.AgendaPimpinan, {
-        foreignKey: 'id_pimpinan',
+      PeriodeJabatan.hasMany(models.AgendaPimpinan, {
+        foreignKey: 'id_jabatan',
         as: 'agendaPimpinans'
       });
-      PeriodePimpinan.hasMany(models.PimpinanAjudan, {
-        foreignKey: 'id_pimpinan',
+      PeriodeJabatan.hasMany(models.PimpinanAjudan, {
+        foreignKey: 'id_jabatan',
         as: 'pimpinanAjudans'
       });
     }
   }
 
-  PeriodePimpinan.init({
-    id_pimpinan: {
+  PeriodeJabatan.init({
+    id_jabatan: {
       type: DataTypes.STRING(10),
       allowNull: false,
       primaryKey: true,
       references: {
-        model: 'Pimpinans',
-        key: 'id_pimpinan'
+        model: 'JabatanPimpinans',
+        key: 'id_jabatan'
       }
     },
     id_periode: {
@@ -50,12 +50,12 @@ module.exports = (sequelize, DataTypes) => {
         key: 'id_periode'
       }
     },
-    id_jabatan: {
+    id_pimpinan: {
       type: DataTypes.STRING(10),
       allowNull: true,
       references: {
-        model: 'JabatanPimpinans',
-        key: 'id_jabatan'
+        model: 'Pimpinans',
+        key: 'id_pimpinan'
       }
     },
     status_aktif: {
@@ -64,9 +64,9 @@ module.exports = (sequelize, DataTypes) => {
     }
   }, {
     sequelize,
-    modelName: 'PeriodePimpinan',
-    tableName: 'PeriodePimpinans'
+    modelName: 'PeriodeJabatan',
+    tableName: 'PeriodeJabatans'
   });
 
-  return PeriodePimpinan;
+  return PeriodeJabatan;
 };

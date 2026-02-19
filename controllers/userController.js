@@ -1,4 +1,4 @@
-const { User, Role, PimpinanAjudan, PeriodePimpinan, Pimpinan, Periode } = require('../models');
+const { User, Role, PimpinanAjudan, PeriodeJabatan, Pimpinan, Periode } = require('../models');
 const bcrypt = require('bcryptjs');
 
 // Helper to generate User ID
@@ -29,8 +29,8 @@ exports.getAllUsers = async (req, res) => {
                     as: 'pimpinanAjudans',
                     include: [
                         {
-                            model: PeriodePimpinan,
-                            as: 'periodePimpinan',
+                            model: PeriodeJabatan,
+                            as: 'periodeJabatan',
                             include: [
                                 { model: Pimpinan, as: 'pimpinan' },
                                 { model: Periode, as: 'periode' }
@@ -53,7 +53,7 @@ exports.createUser = async (req, res) => {
         const { 
             nama, email, password, role_id, nip, no_hp, 
             status_aktif, instansi, alamat, jabatan,
-            id_pimpinan_ajudan, id_periode_ajudan, keterangan_ajudan // For Ajudan role
+            id_jabatan_ajudan, id_periode_ajudan, keterangan_ajudan // id_jabatan_ajudan now
         } = req.body;
 
         // Validations
@@ -84,10 +84,10 @@ exports.createUser = async (req, res) => {
 
         const role = await Role.findByPk(role_id);
         if (role && role.nama_role.toLowerCase() === 'ajudan') {
-            if (id_pimpinan_ajudan && id_periode_ajudan) {
+            if (id_jabatan_ajudan && id_periode_ajudan) {
                 await PimpinanAjudan.create({
                     id_user_ajudan: newUser.id_user,
-                    id_pimpinan: id_pimpinan_ajudan,
+                    id_jabatan: id_jabatan_ajudan,
                     id_periode: id_periode_ajudan,
                     keterangan: keterangan_ajudan || 'Assignment Ajudan'
                 });
@@ -114,7 +114,7 @@ exports.updateUser = async (req, res) => {
         const { 
             nama, email, password, role_id, nip, no_hp, 
             status_aktif, instansi, alamat, jabatan,
-            id_pimpinan_ajudan, id_periode_ajudan // For Ajudan role
+            id_jabatan_ajudan, id_periode_ajudan // id_jabatan_ajudan here too
         } = req.body;
 
         const user = await User.findByPk(id_user);
@@ -142,18 +142,23 @@ exports.updateUser = async (req, res) => {
         
         if (role && role.nama_role.toLowerCase() === 'ajudan') {
              // Upsert PimpinanAjudan
-             if (id_pimpinan_ajudan && id_periode_ajudan) {
+             if (id_jabatan_ajudan && id_periode_ajudan) {
                  const existingAssignment = await PimpinanAjudan.findOne({
                      where: { id_user_ajudan: id_user }
                  });
 
                  if (existingAssignment) {
+                     // Update
+                     await existingAssignment.update({
+                         id_jabatan: id_jabatan_ajudan,
+                         id_periode: id_periode_ajudan
+                     });
                      await existingAssignment.destroy();
                  }
 
                  await PimpinanAjudan.create({
                     id_user_ajudan: id_user,
-                    id_pimpinan: id_pimpinan_ajudan,
+                    id_jabatan: id_jabatan_ajudan,
                     id_periode: id_periode_ajudan,
                     keterangan: 'Assignment Ajudan Update'
                 });

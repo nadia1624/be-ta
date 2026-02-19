@@ -1,4 +1,4 @@
-const { Pimpinan, PeriodePimpinan, JabatanPimpinan, Periode } = require('../models');
+const { Pimpinan, PeriodeJabatan, JabatanPimpinan, Periode } = require('../models');
 
 // Helper to generate ID
 const generateId = async () => {
@@ -16,7 +16,7 @@ const generateId = async () => {
 
 exports.getAllPimpinan = async (req, res) => {
   try {
-    const data = await PeriodePimpinan.findAll({
+    const data = await PeriodeJabatan.findAll({
       include: [
         { model: Pimpinan, as: 'pimpinan' },
         { model: JabatanPimpinan, as: 'jabatan' },
@@ -55,20 +55,32 @@ exports.createOrUpdatePimpinan = async (req, res) => {
       await pimpinan.update({ nama_pimpinan, email, no_hp });
     }
 
-    let assignment = await PeriodePimpinan.findOne({
+    // Check existing assignment by id_jabatan and id_periode? 
+    // Wait, PK of PeriodeJabatan is id_jabatan + id_periode? 
+    // Migration 642 says: id_jabatan is PK.
+    // Migration 651 (Model): id_jabatan (PK), id_periode (PK).
+    // So we search by id_jabatan and id_periode.
+    // BUT we are assigning a PIMPINAN to a JABATAN in a PERIODE.
+    // So distinct is id_jabatan + id_periode. Pimpinan is generic FK? 
+    // Migration 652: id_pimpinan is just a FK.
+    
+    // So if we are "Creating Pimpinan Assignment", we are actually Creating/Updating a PeriodeJabatan record.
+    // We strictly need id_jabatan and id_periode.
+    
+    let assignment = await PeriodeJabatan.findOne({
       where: {
-        id_pimpinan: pimpinan.id_pimpinan,
+        id_jabatan: id_jabatan,
         id_periode: id_periode
       }
     });
 
     if (assignment) {
       await assignment.update({
-        id_jabatan,
+        id_pimpinan: pimpinan.id_pimpinan, // Assign this pimpinan to the position
         status_aktif: status_aktif || 'aktif'
       });
     } else {
-      await PeriodePimpinan.create({
+      await PeriodeJabatan.create({
         id_pimpinan: pimpinan.id_pimpinan,
         id_periode,
         id_jabatan,
@@ -90,21 +102,11 @@ exports.createOrUpdatePimpinan = async (req, res) => {
 
 exports.deletePimpinan = async (req, res) => {
     try {
-        const { id_pimpinan, id_periode } = req.body; // Or params?
-        // Usually we delete the assignment (PeriodePimpinan)
-        // If we want to delete pimpinan entirely from system, we need to check if they are in other periods
+        const { id_jabatan, id_periode } = req.body; 
         
-        // For this page "Pimpinan Management" which lists assignments:
-        // We delete the assignment.
-        
-        // However, standard REST usually uses ID in URL.
-        // But PeriodePimpinan has composite key.
-        // Let's assume we pass id_pimpinan and id_periode as query or body, or use a surrogate key if exists.
-        // Model definition shows composite PK: id_pimpinan, id_periode.
-        
-        await PeriodePimpinan.destroy({
+        await PeriodeJabatan.destroy({
             where: {
-                id_pimpinan: id_pimpinan,
+                id_jabatan: id_jabatan,
                 id_periode: id_periode
             }
         });
@@ -140,7 +142,7 @@ exports.getAllPimpinanData = async (req, res) => {
 
 exports.getActiveAssignments = async (req, res) => {
     try {
-        const data = await PeriodePimpinan.findAll({
+        const data = await PeriodeJabatan.findAll({
             where: { status_aktif: 'aktif' },
             include: [
                 { model: Pimpinan, as: 'pimpinan' },

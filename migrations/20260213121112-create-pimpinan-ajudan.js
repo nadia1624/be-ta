@@ -4,7 +4,7 @@
 module.exports = {
   async up(queryInterface, Sequelize) {
     await queryInterface.createTable('PimpinanAjudans', {
-      id_pimpinan: {
+      id_jabatan: {
         type: Sequelize.STRING(10),
         allowNull: false,
         primaryKey: true
@@ -41,14 +41,14 @@ module.exports = {
       }
     });
 
-    // Composite FK: (id_pimpinan, id_periode) -> PeriodePimpinans
+    // Composite FK: (id_jabatan, id_periode) -> PeriodeJabatans
     await queryInterface.addConstraint('PimpinanAjudans', {
-      fields: ['id_pimpinan', 'id_periode'],
+      fields: ['id_jabatan', 'id_periode'],
       type: 'foreign key',
       name: 'fk_pimpinan_ajudan_periode',
       references: {
-        table: 'PeriodePimpinans',
-        fields: ['id_pimpinan', 'id_periode']
+        table: 'PeriodeJabatans',
+        fields: ['id_jabatan', 'id_periode']
       },
       onUpdate: 'CASCADE',
       onDelete: 'CASCADE'
