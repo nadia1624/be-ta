@@ -15,7 +15,12 @@ app.use(cookieParser());
 
 // Routes
 const authRoutes = require('./routes/authRoutes');
+const periodeRoutes = require('./routes/periodeRoutes');
+
 app.use('/api/auth', authRoutes);
+app.use('/api/periode', periodeRoutes);
+app.use('/api/pimpinan', require('./routes/pimpinanRoutes'));
+app.use('/api/users', require('./routes/userRoutes'));
 
 // Health check
 app.get('/', (req, res) => {
