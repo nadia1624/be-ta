@@ -38,6 +38,18 @@ module.exports = {
         type: Sequelize.DATEONLY,
         allowNull: true
       },
+      tanggal_kegiatan: {
+        type: Sequelize.DATEONLY,
+        allowNull: true
+      },
+      waktu_mulai: {
+        type: Sequelize.TIME,
+        allowNull: true
+      },
+      waktu_selesai: {
+        type: Sequelize.TIME,
+        allowNull: true
+      },
       nama_kegiatan: {
         type: Sequelize.TEXT,
         allowNull: true

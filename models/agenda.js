@@ -61,6 +61,18 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATEONLY,
       allowNull: true
     },
+    tanggal_kegiatan: {
+      type: DataTypes.DATEONLY,
+      allowNull: true
+    },
+    waktu_mulai: {
+      type: DataTypes.TIME,
+      allowNull: true
+    },
+    waktu_selesai: {
+      type: DataTypes.TIME,
+      allowNull: true
+    },
     nama_kegiatan: {
       type: DataTypes.TEXT,
       allowNull: true

@@ -1,5 +1,4 @@
 'use strict';
-
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
@@ -18,17 +17,31 @@ module.exports = {
           key: 'id_slot_waktu'
         },
         onUpdate: 'CASCADE',
-        onDelete: 'RESTRICT'
+        onDelete: 'CASCADE'
+      },
+      id_jabatan: {
+        type: Sequelize.STRING(10),
+        allowNull: false,
+        primaryKey: true
+      },
+      id_periode: {
+        type: Sequelize.STRING(10),
+        allowNull: false,
+        primaryKey: true
       },
       id_agenda: {
         type: Sequelize.STRING(10),
-        allowNull: true,
+        allowNull: false,
         references: {
           model: 'Agenda',
           key: 'id_agenda'
         },
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
+      },
+      kehadiran: {
+        type: Sequelize.ENUM('hadir', 'tidak_hadir'),
+        defaultValue: 'hadir'
       },
       createdAt: {
         allowNull: false,
@@ -42,12 +55,30 @@ module.exports = {
       }
     });
 
-    // Add indexes
-    await queryInterface.addIndex('SlotAgendaPimpinans', ['id_agenda'], {
-      name: 'idx_slot_agenda_pimpinans_agenda'
+
+
+    // Composite FK: (id_jabatan, id_periode) -> PeriodeJabatans
+    await queryInterface.addConstraint('SlotAgendaPimpinans', {
+      fields: ['id_jabatan', 'id_periode'],
+      type: 'foreign key',
+      name: 'fk_kehadiran_periode_jabatan',
+      references: {
+        table: 'PeriodeJabatans',
+        fields: ['id_jabatan', 'id_periode']
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'CASCADE'
+    });
+
+    // Indexes
+    await queryInterface.addIndex('SlotAgendaPimpinans', ['id_jabatan'], {
+      name: 'idx_kehadiran_jabatan'
     });
     await queryInterface.addIndex('SlotAgendaPimpinans', ['tanggal'], {
-      name: 'idx_slot_agenda_pimpinans_tanggal'
+      name: 'idx_kehadiran_tanggal'
+    });
+    await queryInterface.addIndex('SlotAgendaPimpinans', ['kehadiran'], {
+      name: 'idx_kehadiran_status'
     });
   },
 

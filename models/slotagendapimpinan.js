@@ -4,23 +4,14 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class SlotAgendaPimpinan extends Model {
     static associate(models) {
-      SlotAgendaPimpinan.belongsTo(models.SlotWaktu, {
-        foreignKey: 'id_slot_waktu',
-        as: 'slotWaktu'
-      });
       SlotAgendaPimpinan.belongsTo(models.Agenda, {
         foreignKey: 'id_agenda',
         as: 'agenda'
       });
-      SlotAgendaPimpinan.hasMany(models.KehadiranPimpinan, {
-        foreignKey: 'tanggal',
-        sourceKey: 'tanggal',
-        as: 'kehadiranPimpinans'
-      });
-      SlotAgendaPimpinan.hasMany(models.SlotAgendaStaff, {
-        foreignKey: 'tanggal',
-        sourceKey: 'tanggal',
-        as: 'slotAgendaStaffs'
+      SlotAgendaPimpinan.belongsTo(models.PeriodeJabatan, {
+        foreignKey: 'id_jabatan',
+        targetKey: 'id_jabatan',
+        as: 'periodeJabatan'
       });
     }
   }
@@ -40,13 +31,35 @@ module.exports = (sequelize, DataTypes) => {
         key: 'id_slot_waktu'
       }
     },
+    id_jabatan: {
+      type: DataTypes.STRING(10),
+      allowNull: false,
+      primaryKey: true,
+      references: {
+        model: 'PeriodeJabatans',
+        key: 'id_jabatan'
+      }
+    },
+    id_periode: {
+      type: DataTypes.STRING(10),
+      allowNull: false,
+      primaryKey: true,
+      references: {
+        model: 'PeriodeJabatans',
+        key: 'id_periode'
+      }
+    },
     id_agenda: {
       type: DataTypes.STRING(10),
-      allowNull: true,
+      allowNull: false,
       references: {
         model: 'Agenda',
         key: 'id_agenda'
       }
+    },
+    kehadiran: {
+      type: DataTypes.ENUM('hadir', 'tidak_hadir'),
+      defaultValue: 'hadir'
     }
   }, {
     sequelize,

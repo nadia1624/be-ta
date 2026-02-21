@@ -9,6 +9,21 @@ module.exports = {
         allowNull: false,
         primaryKey: true
       },
+      id_slot_waktu: {
+        type: Sequelize.STRING(10),
+        allowNull: false,
+        primaryKey: true
+      },
+      id_jabatan: {
+        type: Sequelize.STRING(10),
+        allowNull: false,
+        primaryKey: true
+      },
+      id_periode: {
+        type: Sequelize.STRING(10),
+        allowNull: false,
+        primaryKey: true
+      },
       id_user_staff: {
         type: Sequelize.STRING(10),
         allowNull: false,
@@ -19,11 +34,6 @@ module.exports = {
         },
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
-      },
-      id_slot_waktu: {
-        type: Sequelize.STRING(10),
-        allowNull: false,
-        primaryKey: true
       },
       id_penugasan: {
         type: Sequelize.STRING(10),
@@ -51,17 +61,17 @@ module.exports = {
       }
     });
 
-    // Composite FK: (tanggal, id_slot_waktu) -> SlotAgendaPimpinans
+    // Composite FK: (tanggal, id_slot_waktu, id_jabatan, id_periode) -> SlotAgendaPimpinans
     await queryInterface.addConstraint('SlotAgendaStaffs', {
-      fields: ['tanggal', 'id_slot_waktu'],
+      fields: ['tanggal', 'id_slot_waktu', 'id_jabatan', 'id_periode'],
       type: 'foreign key',
       name: 'fk_slot_agenda_staff_slot_pimpinan',
       references: {
         table: 'SlotAgendaPimpinans',
-        fields: ['tanggal', 'id_slot_waktu']
+        fields: ['tanggal', 'id_slot_waktu', 'id_jabatan', 'id_periode']
       },
       onUpdate: 'CASCADE',
-      onDelete: 'RESTRICT'
+      onDelete: 'CASCADE'
     });
 
     // Indexes
