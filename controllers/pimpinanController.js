@@ -124,12 +124,25 @@ class PimpinanController extends BaseController {
 
     async getActiveAssignments(req, res) {
         try {
+            const { nama_role, id_user } = req.user;
+            const { PimpinanAjudan } = require('../models');
+
+            const whereClause = { status_aktif: 'aktif' };
+            const pimpinanAjudanInclude = { model: PimpinanAjudan, as: 'pimpinanAjudans' };
+
+            // If Ajudan, only get their assigned leaders
+            if (nama_role === 'Ajudan') {
+                pimpinanAjudanInclude.where = { id_user_ajudan: id_user };
+                pimpinanAjudanInclude.required = true;
+            }
+
             const data = await PeriodeJabatan.findAll({
-                where: { status_aktif: 'aktif' },
+                where: whereClause,
                 include: [
                     { model: Pimpinan, as: 'pimpinan' },
                     { model: Periode, as: 'periode' },
-                    { model: JabatanPimpinan, as: 'jabatan' }
+                    { model: JabatanPimpinan, as: 'jabatan' },
+                    pimpinanAjudanInclude
                 ],
                 order: [[{ model: Pimpinan, as: 'pimpinan' }, 'nama_pimpinan', 'ASC']]
             });

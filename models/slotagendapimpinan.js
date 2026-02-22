@@ -8,10 +8,19 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'id_agenda',
         as: 'agenda'
       });
+      SlotAgendaPimpinan.belongsTo(models.SlotWaktu, {
+        foreignKey: 'id_slot_waktu',
+        as: 'slotWaktu'
+      });
       SlotAgendaPimpinan.belongsTo(models.PeriodeJabatan, {
-        foreignKey: 'id_jabatan',
+        foreignKey: 'id_jabatan_hadir',
         targetKey: 'id_jabatan',
-        as: 'periodeJabatan'
+        as: 'periodeJabatanHadir'
+      });
+      SlotAgendaPimpinan.belongsTo(models.PeriodeJabatan, {
+        foreignKey: 'id_jabatan_diusulkan',
+        targetKey: 'id_jabatan',
+        as: 'periodeJabatanDiusulkan'
       });
     }
   }
@@ -31,7 +40,7 @@ module.exports = (sequelize, DataTypes) => {
         key: 'id_slot_waktu'
       }
     },
-    id_jabatan: {
+    id_jabatan_hadir: {
       type: DataTypes.STRING(10),
       allowNull: false,
       primaryKey: true,
@@ -40,7 +49,7 @@ module.exports = (sequelize, DataTypes) => {
         key: 'id_jabatan'
       }
     },
-    id_periode: {
+    id_periode_hadir: {
       type: DataTypes.STRING(10),
       allowNull: false,
       primaryKey: true,
@@ -55,6 +64,22 @@ module.exports = (sequelize, DataTypes) => {
       references: {
         model: 'Agenda',
         key: 'id_agenda'
+      }
+    },
+    id_jabatan_diusulkan: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+      references: {
+        model: 'PeriodeJabatans',
+        key: 'id_jabatan'
+      }
+    },
+    id_periode_diusulkan: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+      references: {
+        model: 'PeriodeJabatans',
+        key: 'id_periode'
       }
     },
     kehadiran: {

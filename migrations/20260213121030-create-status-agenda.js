@@ -21,7 +21,7 @@ module.exports = {
       },
       id_user_sespri: {
         type: Sequelize.STRING(10),
-        allowNull: true,
+        allowNull: false,
         references: {
           model: 'Users',
           key: 'id_user'
@@ -30,7 +30,11 @@ module.exports = {
         onDelete: 'SET NULL'
       },
       status_agenda: {
-        type: Sequelize.ENUM('pending', 'disetujui', 'ditolak'),
+        type: Sequelize.ENUM(
+          'pending', 'revision', 'rejected_sespri', 'approved_sespri', 
+          'approved_ajudan', 'delegated', 'rejected_ajudan', 
+          'canceled', 'completed'
+        ),
         defaultValue: 'pending'
       },
       tanggal_status: {

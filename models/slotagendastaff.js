@@ -30,15 +30,6 @@ module.exports = (sequelize, DataTypes) => {
         key: 'tanggal'
       }
     },
-    id_user_staff: {
-      type: DataTypes.STRING(10),
-      allowNull: false,
-      primaryKey: true,
-      references: {
-        model: 'Users',
-        key: 'id_user'
-      }
-    },
     id_slot_waktu: {
       type: DataTypes.STRING(10),
       allowNull: false,
@@ -46,6 +37,33 @@ module.exports = (sequelize, DataTypes) => {
       references: {
         model: 'SlotAgendaPimpinans',
         key: 'id_slot_waktu'
+      }
+    },
+    id_jabatan_hadir: {
+      type: DataTypes.STRING(10),
+      allowNull: false,
+      primaryKey: true,
+      references: {
+        model: 'SlotAgendaPimpinans',
+        key: 'id_jabatan_hadir'
+      }
+    },
+    id_periode_hadir: {
+      type: DataTypes.STRING(10),
+      allowNull: false,
+      primaryKey: true,
+      references: {
+        model: 'SlotAgendaPimpinans',
+        key: 'id_periode_hadir'
+      }
+    },
+    id_user_staff: {
+      type: DataTypes.STRING(10),
+      allowNull: false,
+      primaryKey: true,
+      references: {
+        model: 'Users',
+        key: 'id_user'
       }
     },
     id_penugasan: {

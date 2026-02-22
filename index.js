@@ -26,6 +26,7 @@ app.use('/api/periode', periodeRoutes);
 app.use('/api/pimpinan', require('./routes/pimpinanRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/agenda', require('./routes/agendaRoutes'));
+app.use('/api/berita', require('./routes/beritaRoutes'));
 
 // Health check
 app.get('/', (req, res) => {

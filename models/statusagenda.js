@@ -31,14 +31,18 @@ module.exports = (sequelize, DataTypes) => {
     },
     id_user_sespri: {
       type: DataTypes.STRING(10),
-      allowNull: true,
+      allowNull: false,
       references: {
         model: 'Users',
         key: 'id_user'
       }
     },
     status_agenda: {
-      type: DataTypes.ENUM('pending', 'disetujui', 'ditolak'),
+      type: DataTypes.ENUM(
+        'pending', 'revision', 'rejected_sespri', 'approved_sespri', 
+        'approved_ajudan', 'delegated', 'rejected_ajudan', 
+        'canceled', 'completed'
+      ),
       defaultValue: 'pending'
     },
     tanggal_status: {

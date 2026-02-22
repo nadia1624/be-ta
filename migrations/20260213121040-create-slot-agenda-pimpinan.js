@@ -19,12 +19,12 @@ module.exports = {
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
       },
-      id_jabatan: {
+      id_jabatan_hadir: {
         type: Sequelize.STRING(10),
         allowNull: false,
         primaryKey: true
       },
-      id_periode: {
+      id_periode_hadir: {
         type: Sequelize.STRING(10),
         allowNull: false,
         primaryKey: true
@@ -38,6 +38,14 @@ module.exports = {
         },
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
+      },
+      id_jabatan_diusulkan: {
+        type: Sequelize.STRING(10),
+        allowNull: true
+      },
+      id_periode_diusulkan: {
+        type: Sequelize.STRING(10),
+        allowNull: true
       },
       kehadiran: {
         type: Sequelize.ENUM('hadir', 'tidak_hadir'),
@@ -55,13 +63,10 @@ module.exports = {
       }
     });
 
-
-
-    // Composite FK: (id_jabatan, id_periode) -> PeriodeJabatans
     await queryInterface.addConstraint('SlotAgendaPimpinans', {
-      fields: ['id_jabatan', 'id_periode'],
+      fields: ['id_jabatan_hadir', 'id_periode_hadir'],
       type: 'foreign key',
-      name: 'fk_kehadiran_periode_jabatan',
+      name: 'fk_slot_agenda_periode_hadir',
       references: {
         table: 'PeriodeJabatans',
         fields: ['id_jabatan', 'id_periode']
@@ -70,15 +75,32 @@ module.exports = {
       onDelete: 'CASCADE'
     });
 
-    // Indexes
-    await queryInterface.addIndex('SlotAgendaPimpinans', ['id_jabatan'], {
-      name: 'idx_kehadiran_jabatan'
+    await queryInterface.addConstraint('SlotAgendaPimpinans', {
+      fields: ['id_jabatan_diusulkan', 'id_periode_diusulkan'],
+      type: 'foreign key',
+      name: 'fk_slot_agenda_periode_diusulkan',
+      references: {
+        table: 'PeriodeJabatans',
+        fields: ['id_jabatan', 'id_periode']
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'SET NULL'
+    });
+
+    await queryInterface.addConstraint('SlotAgendaPimpinans', {
+      fields: ['id_agenda', 'id_jabatan_diusulkan', 'id_periode_diusulkan'],
+      type: 'unique',
+      name: 'uq_slot_agenda_diusulkan'
+    });
+
+    await queryInterface.addIndex('SlotAgendaPimpinans', ['id_jabatan_hadir'], {
+      name: 'idx_slot_agenda_jabatan_hadir'
     });
     await queryInterface.addIndex('SlotAgendaPimpinans', ['tanggal'], {
-      name: 'idx_kehadiran_tanggal'
+      name: 'idx_slot_agenda_tanggal'
     });
     await queryInterface.addIndex('SlotAgendaPimpinans', ['kehadiran'], {
-      name: 'idx_kehadiran_status'
+      name: 'idx_slot_agenda_kehadiran'
     });
   },
 

@@ -17,8 +17,12 @@ module.exports = (sequelize, DataTypes) => {
         as: 'jabatan'
       });
       PeriodeJabatan.hasMany(models.SlotAgendaPimpinan, {
-        foreignKey: 'id_jabatan',
-        as: 'slotAgendaPimpinans'
+        foreignKey: 'id_jabatan_hadir',
+        as: 'slotAgendaHadir'
+      });
+      PeriodeJabatan.hasMany(models.SlotAgendaPimpinan, {
+        foreignKey: 'id_jabatan_diusulkan',
+        as: 'slotAgendaDiusulkan'
       });
       PeriodeJabatan.hasMany(models.AgendaPimpinan, {
         foreignKey: 'id_jabatan',
