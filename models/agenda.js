@@ -24,6 +24,10 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'id_agenda',
         as: 'kaskpdPendampings'
       });
+      Agenda.hasMany(models.Penugasan, {
+        foreignKey: 'id_agenda',
+        as: 'penugasans'
+      });
     }
   }
 

@@ -9,6 +9,16 @@ module.exports = {
         allowNull: false,
         primaryKey: true
       },
+      id_agenda: {
+        type: Sequelize.STRING(10),
+        allowNull: true,
+        references: {
+          model: 'Agenda',
+          key: 'id_agenda'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL'
+      },
       id_user_kasubag: {
         type: Sequelize.STRING(10),
         allowNull: true,

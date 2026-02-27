@@ -4,10 +4,9 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class SlotAgendaStaff extends Model {
     static associate(models) {
-      SlotAgendaStaff.belongsTo(models.SlotAgendaPimpinan, {
-        foreignKey: 'tanggal',
-        targetKey: 'tanggal',
-        as: 'slotAgendaPimpinan'
+      SlotAgendaStaff.belongsTo(models.SlotWaktu, {
+        foreignKey: 'id_slot_waktu',
+        as: 'slotWaktu'
       });
       SlotAgendaStaff.belongsTo(models.User, {
         foreignKey: 'id_user_staff',
@@ -24,37 +23,15 @@ module.exports = (sequelize, DataTypes) => {
     tanggal: {
       type: DataTypes.DATEONLY,
       allowNull: false,
-      primaryKey: true,
-      references: {
-        model: 'SlotAgendaPimpinans',
-        key: 'tanggal'
-      }
+      primaryKey: true
     },
     id_slot_waktu: {
       type: DataTypes.STRING(10),
       allowNull: false,
       primaryKey: true,
       references: {
-        model: 'SlotAgendaPimpinans',
+        model: 'SlotWaktus',
         key: 'id_slot_waktu'
-      }
-    },
-    id_jabatan_hadir: {
-      type: DataTypes.STRING(10),
-      allowNull: false,
-      primaryKey: true,
-      references: {
-        model: 'SlotAgendaPimpinans',
-        key: 'id_jabatan_hadir'
-      }
-    },
-    id_periode_hadir: {
-      type: DataTypes.STRING(10),
-      allowNull: false,
-      primaryKey: true,
-      references: {
-        model: 'SlotAgendaPimpinans',
-        key: 'id_periode_hadir'
       }
     },
     id_user_staff: {
@@ -76,7 +53,8 @@ module.exports = (sequelize, DataTypes) => {
     },
     kehadiran: {
       type: DataTypes.ENUM('hadir', 'tidak_hadir', 'izin'),
-      defaultValue: 'hadir'
+      allowNull: true,
+      defaultValue: null
     }
   }, {
     sequelize,

@@ -1,5 +1,5 @@
 const BaseController = require('./BaseController');
-const { Agenda, StatusAgenda, AgendaPimpinan, SlotAgendaPimpinan, PeriodeJabatan, JabatanPimpinan, Pimpinan, SlotWaktu, User, sequelize } = require('../models');
+const { Agenda, StatusAgenda, AgendaPimpinan, SlotAgendaPimpinan, PeriodeJabatan, JabatanPimpinan, Pimpinan, SlotWaktu, User, PimpinanAjudan, sequelize } = require('../models');
 const { Op } = require('sequelize');
 
 class AgendaController extends BaseController {
@@ -295,13 +295,13 @@ class AgendaController extends BaseController {
                 return this.sendResponse(res, 404, false, 'Agenda tidak ditemukan');
             }
 
-            if (agenda.id_user_pemohon !== id_user_pemohon) {
+            if (agenda.id_user_pemohon !== id_user_pemohon && req.user.nama_role !== 'Sespri') {
                 await transaction.rollback();
                 return this.sendResponse(res, 403, false, 'Anda tidak memiliki akses untuk mengedit agenda ini');
             }
 
             const latestStatus = agenda.statusAgendas?.[0]?.status_agenda;
-            if (latestStatus !== 'revision') {
+            if (latestStatus !== 'revision' && req.user.nama_role !== 'Sespri') {
                 await transaction.rollback();
                 return this.sendResponse(res, 400, false, 'Agenda hanya bisa diedit jika status adalah revisi');
             }
@@ -330,15 +330,18 @@ class AgendaController extends BaseController {
             await agenda.update(updateData, { transaction });
 
             // Create new status record: back to pending after revision edit
-            const id_status_agenda = await this.generateStatusAgendaId(transaction);
-            await StatusAgenda.create({
-                id_status_agenda,
-                id_agenda,
-                id_user_sespri: req.user.id_user,
-                status_agenda: 'pending',
-                tanggal_status: new Date(),
-                catatan: 'Permohonan telah direvisi oleh pemohon'
-            }, { transaction });
+            // Only role pemohon triggers this
+            if (req.user.nama_role !== 'Sespri') {
+                const id_status_agenda = await this.generateStatusAgendaId(transaction);
+                await StatusAgenda.create({
+                    id_status_agenda,
+                    id_agenda,
+                    id_user_sespri: req.user.id_user,
+                    status_agenda: 'pending',
+                    tanggal_status: new Date(),
+                    catatan: 'Permohonan telah direvisi oleh pemohon'
+                }, { transaction });
+            }
 
             await transaction.commit();
             return this.sendResponse(res, 200, true, 'Agenda berhasil diperbarui', agenda);
@@ -453,7 +456,6 @@ class AgendaController extends BaseController {
 
             // Security Check: If Ajudan, verify they are assigned to this leader
             if (nama_role === 'Ajudan') {
-                const { PimpinanAjudan } = require('../models');
                 const assignment = await PimpinanAjudan.findOne({
                     where: { id_user_ajudan: id_user, id_jabatan, id_periode },
                     transaction
@@ -478,19 +480,99 @@ class AgendaController extends BaseController {
             }
 
             const agenda = agendaPimpinan.agenda;
-            const surat_disposisi = req.file ? req.file.path : agendaPimpinan.surat_disposisi;
+            let surat_disposisi = agendaPimpinan.surat_disposisi;
 
-            // Determine representative name if it's a pimpinan ID
             let finalNamaPerwakilan = nama_perwakilan;
-            if (status_kehadiran === 'diwakilkan' && id_jabatan_perwakilan) {
-                const rep = await PeriodeJabatan.findOne({
-                    where: { id_jabatan: id_jabatan_perwakilan, id_periode: id_periode_perwakilan },
-                    include: [{ model: Pimpinan, as: 'pimpinan' }],
-                    transaction
-                });
-                if (rep && rep.pimpinan) {
-                    finalNamaPerwakilan = rep.pimpinan.nama_pimpinan;
+            let finalJabatanPerwakilan = '-';
+            let originalPimpinanObj = null;
+
+            // Fetch original Pimpinan details for the PDF
+            const origPimpinan = await PeriodeJabatan.findOne({
+                where: { id_jabatan, id_periode },
+                include: [{ model: Pimpinan, as: 'pimpinan' }, { model: JabatanPimpinan, as: 'jabatan' }],
+                transaction
+            });
+            if (origPimpinan && origPimpinan.pimpinan) {
+               originalPimpinanObj = origPimpinan;
+            }
+
+            if (status_kehadiran === 'diwakilkan') {
+                if (id_jabatan_perwakilan) {
+                    const rep = await PeriodeJabatan.findOne({
+                        where: { id_jabatan: id_jabatan_perwakilan, id_periode: id_periode_perwakilan },
+                        include: [{ model: Pimpinan, as: 'pimpinan' }, { model: JabatanPimpinan, as: 'jabatan' }],
+                        transaction
+                    });
+                    if (rep && rep.pimpinan) {
+                        finalNamaPerwakilan = rep.pimpinan.nama_pimpinan;
+                        finalJabatanPerwakilan = rep.jabatan?.nama_jabatan || '-';
+                    }
                 }
+
+                // Generate PDF Disposisi automatically
+                const fs = require('fs');
+                const path = require('path');
+                const PDFDocument = require('pdfkit');
+                
+                const disposisiDir = path.join(__dirname, '../uploads/surat_disposisi');
+                if (!fs.existsSync(disposisiDir)) {
+                    fs.mkdirSync(disposisiDir, { recursive: true });
+                }
+
+                const filename = `disposisi-${id_agenda}-${id_jabatan}-${Date.now()}.pdf`;
+                const filepath = path.join(disposisiDir, filename);
+
+                await new Promise((resolve, reject) => {
+                    const doc = new PDFDocument({ margin: 50 });
+                    const writeStream = fs.createWriteStream(filepath);
+                    doc.pipe(writeStream);
+
+                    // Header
+                    doc.fontSize(16).font('Helvetica-Bold').text('SURAT DISPOSISI KEHADIRAN', { align: 'center' });
+                    doc.moveDown(2);
+
+                    // Body
+                    doc.fontSize(12).font('Helvetica').text('Dengan hormat,', { align: 'left' });
+                    doc.moveDown(1);
+                    doc.text('Sehubungan dengan undangan kegiatan berikut:');
+                    doc.moveDown(0.5);
+                    doc.text(`Nama Kegiatan  : ${agenda.nama_kegiatan}`);
+                    doc.text(`Waktu               : ${new Date(agenda.tanggal_kegiatan).toLocaleDateString('id-ID')} (${agenda.waktu_mulai} - ${agenda.waktu_selesai}) WIB`);
+                    doc.text(`Tempat             : ${agenda.lokasi_kegiatan}`);
+                    doc.moveDown(1);
+                    
+                    doc.text('Bahwa Pimpinan:');
+                    doc.font('Helvetica-Bold').text(`${originalPimpinanObj ? originalPimpinanObj.pimpinan.nama_pimpinan : '-'} (${originalPimpinanObj ? originalPimpinanObj.jabatan.nama_jabatan : '-'})`);
+                    doc.font('Helvetica').moveDown(1);
+                    
+                    doc.text('Menugaskan dan mendelegasikan kehadiran kepada:');
+                    doc.font('Helvetica-Bold').text(`${finalNamaPerwakilan} ${finalJabatanPerwakilan !== '-' ? `(${finalJabatanPerwakilan})` : ''}`);
+                    doc.font('Helvetica').moveDown(1);
+                    
+                    if (keterangan) {
+                       doc.text(`Catatan/Instruksi Tambahan:`);
+                       doc.font('Helvetica-Oblique').text(`"${keterangan}"`);
+                       doc.font('Helvetica').moveDown(1);
+                    }
+
+                    doc.text('Demikian surat disposisi ini dibuat agar dapat dilaksanakan dengan penuh tanggung jawab.');
+                    doc.moveDown(3);
+
+                    // Footer Signature Area
+                    const todayDate = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+                    doc.text(`Bandung, ${todayDate}`, { align: 'right' });
+                    doc.text('Ajudan Pimpinan', { align: 'right' });
+                    doc.moveDown(3);
+                    doc.text('_______________________', { align: 'right' });
+                    doc.text(`NAMA: ${req.user.nama}`, { align: 'right' });
+
+                    doc.end();
+
+                    writeStream.on('finish', resolve);
+                    writeStream.on('error', reject);
+                });
+
+                surat_disposisi = `uploads/surat_disposisi/${filename}`;
             }
 
             // 1. Update AgendaPimpinan

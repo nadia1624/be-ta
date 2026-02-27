@@ -8,6 +8,10 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'id_slot_waktu',
         as: 'slotAgendaPimpinans'
       });
+      SlotWaktu.hasMany(models.SlotAgendaStaff, {
+        foreignKey: 'id_slot_waktu',
+        as: 'slotAgendaStaffs'
+      });
     }
   }
 
