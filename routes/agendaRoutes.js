@@ -27,8 +27,8 @@ router.get('/slots', authenticateToken, agendaController.getSlots);
 router.get('/all', authenticateToken, authorizeRoles('Sespri'), agendaController.getAllAgendas);
 router.post('/:id_agenda/verify', authenticateToken, authorizeRoles('Sespri'), agendaController.verifyAgenda);
 
-// Leader Agenda Management routes (for Sespri & Ajudan)
-router.get('/leader-agendas', authenticateToken, authorizeRoles('Sespri', 'Ajudan'), agendaController.getLeaderAgendas);
+// Leader Agenda Management routes (for Sespri, Ajudan, Kasubag Protokol, Kasubag Media, Staf Protokol, Staf Media)
+router.get('/leader-agendas', authenticateToken, authorizeRoles('Sespri', 'Ajudan', 'Kasubag Protokol', 'Kasubag Media', 'Staff Protokol', 'Staff Media'), agendaController.getLeaderAgendas);
 router.put('/pimpinan/:id_agenda/:id_jabatan/:id_periode', authenticateToken, authorizeRoles('Sespri', 'Ajudan'), upload.single('surat_disposisi'), agendaController.updateLeaderAttendance);
 router.post('/pimpinan/slots', authenticateToken, authorizeRoles('Sespri', 'Ajudan'), agendaController.updateAgendaSlots);
 

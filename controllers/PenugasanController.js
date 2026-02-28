@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const BaseController = require('./BaseController');
-const { Penugasan, SlotAgendaStaff, SlotAgendaPimpinan, User, Role, Agenda, SlotWaktu, PeriodeJabatan, Pimpinan, Periode, sequelize } = require('../models');
+const { Penugasan, SlotAgendaStaff, SlotAgendaPimpinan, AgendaPimpinan, User, Role, Agenda, StatusAgenda, SlotWaktu, PeriodeJabatan, Pimpinan, Periode, sequelize } = require('../models');
 
 class PenugasanController extends BaseController {
     /**
@@ -41,47 +41,45 @@ class PenugasanController extends BaseController {
 
     async getAgendasForAssignment(req, res) {
         try {
-            // Get unique agendas that have at least one 'hadir' slot 
-            // AND have not been assigned yet for 'protokol' type
+            // Agenda eligible for assignment:
+            // 1. At least one AgendaPimpinan has status_kehadiran = 'hadir' or 'diwakilkan'
+            // 2. No Penugasan (protokol) exists yet for this agenda
             const agendas = await Agenda.findAll({
                 where: {
                     id_agenda: {
+                        // Must have at least one confirmed pimpinan (hadir or diwakilkan)
+                        [Op.in]: sequelize.literal(`(
+                            SELECT DISTINCT "id_agenda"
+                            FROM "AgendaPimpinans"
+                            WHERE "status_kehadiran" IN ('hadir', 'diwakilkan')
+                        )`),
+                        // Must NOT already have a protokol assignment
                         [Op.notIn]: sequelize.literal(`(
-                            SELECT DISTINCT sap."id_agenda" 
-                            FROM "SlotAgendaStaffs" sas
-                            JOIN "Penugasans" p ON sas."id_penugasan" = p."id_penugasan"
-                            JOIN "SlotAgendaPimpinans" sap ON 
-                                sas."tanggal" = sap."tanggal" AND 
-                                sas."id_slot_waktu" = sap."id_slot_waktu" AND 
-                                sas."id_jabatan_hadir" = sap."id_jabatan_hadir" AND 
-                                sas."id_periode_hadir" = sap."id_periode_hadir"
-                            WHERE p."jenis_penugasan" = 'protokol'
+                            SELECT DISTINCT "id_agenda"
+                            FROM "Penugasans"
+                            WHERE "jenis_penugasan" = 'protokol'
+                            AND "id_agenda" IS NOT NULL
                         )`)
                     }
                 },
                 include: [
                     {
-                        model: SlotAgendaPimpinan,
-                        as: 'slotAgendaPimpinans',
-                        required: true, // INNER JOIN to ensure at least one slot exists
-                        where: { kehadiran: 'hadir' }, // This usually represents confirmed presence (pimpinan or rep)
+                        model: AgendaPimpinan,
+                        as: 'agendaPimpinans',
+                        required: true,
+                        where: { status_kehadiran: { [Op.in]: ['hadir', 'diwakilkan'] } },
                         include: [
                             {
-                                model: SlotWaktu,
-                                as: 'slotWaktu'
-                            },
-                            {
                                 model: PeriodeJabatan,
-                                as: 'periodeJabatanHadir',
+                                as: 'periodeJabatan',
                                 include: [
-                                    { model: Pimpinan, as: 'pimpinan' },
-                                    { model: Periode, as: 'periode' }
+                                    { model: Pimpinan, as: 'pimpinan' }
                                 ]
                             }
                         ]
                     }
                 ],
-                order: [['tanggal_kegiatan', 'DESC']]
+                order: [['tanggal_kegiatan', 'ASC']]
             });
 
             return this.sendResponse(res, 200, true, 'Data agenda untuk penugasan berhasil diambil', agendas);
@@ -107,52 +105,80 @@ class PenugasanController extends BaseController {
                 return this.sendResponse(res, 400, false, 'Staf harus dipilih');
             }
 
-            // Find all 'hadir' slots for this agenda
-            const slots = await SlotAgendaPimpinan.findAll({
-                where: { 
+            // Verify agenda has at least one confirmed pimpinan (hadir or diwakilkan)
+            const confirmedPimpinan = await AgendaPimpinan.findOne({
+                where: {
                     id_agenda,
-                    kehadiran: 'hadir'
+                    status_kehadiran: { [Op.in]: ['hadir', 'diwakilkan'] }
                 },
                 transaction
             });
 
-            if (slots.length === 0) {
+            if (!confirmedPimpinan) {
                 await transaction.rollback();
-                return this.sendResponse(res, 404, false, 'Tidak ada slot agenda yang tersedia untuk penugasan (pimpinan tidak hadir)');
+                return this.sendResponse(res, 404, false, 'Tidak ada pimpinan yang terkonfirmasi hadir atau diwakilkan untuk agenda ini');
             }
+
+            // Get the agenda's date and time
+            const agenda = await Agenda.findByPk(id_agenda, { transaction });
+            if (!agenda) {
+                await transaction.rollback();
+                return this.sendResponse(res, 404, false, 'Agenda tidak ditemukan');
+            }
+
+            // Find all slot waktu that overlap with the agenda's time
+            const slots = await SlotWaktu.findAll({
+                where: {
+                    [Op.or]: [
+                        {
+                            slot_waktu_mulai: { [Op.lte]: agenda.waktu_mulai },
+                            slot_waktu_selesai: { [Op.gt]: agenda.waktu_mulai }
+                        },
+                        {
+                            slot_waktu_mulai: { [Op.lt]: agenda.waktu_selesai },
+                            slot_waktu_selesai: { [Op.gte]: agenda.waktu_selesai }
+                        },
+                        {
+                            slot_waktu_mulai: { [Op.gte]: agenda.waktu_mulai },
+                            slot_waktu_selesai: { [Op.lte]: agenda.waktu_selesai }
+                        }
+                    ]
+                },
+                transaction
+            });
 
             const id_penugasan = await this.generatePenugasanId();
             const id_user_kasubag = req.user.id_user;
 
-            // Create Penugasan record
+            // Create Penugasan record with id_agenda
             const penugasan = await Penugasan.create({
                 id_penugasan,
+                id_agenda,
                 id_user_kasubag,
                 jenis_penugasan: 'protokol',
                 deskripsi_penugasan,
                 tanggal_penugasan: new Date()
             }, { transaction });
 
-            // Create SlotAgendaStaff records for ALL slots and ALL staff
-            const staffAssignments = [];
-            for (const slot of slots) {
-                for (const id_user_staff of staff_ids) {
-                    staffAssignments.push({
-                        tanggal: slot.tanggal,
-                        id_slot_waktu: slot.id_slot_waktu,
-                        id_jabatan_hadir: slot.id_jabatan_hadir,
-                        id_periode_hadir: slot.id_periode_hadir,
-                        id_user_staff,
-                        id_penugasan,
-                        kehadiran: 'hadir'
-                    });
+            // Create SlotAgendaStaff records for each overlapping slot and each staff
+            if (slots.length > 0) {
+                const staffAssignments = [];
+                for (const slot of slots) {
+                    for (const id_user_staff of staff_ids) {
+                        staffAssignments.push({
+                            tanggal: agenda.tanggal_kegiatan,
+                            id_slot_waktu: slot.id_slot_waktu,
+                            id_user_staff,
+                            id_penugasan,
+                            kehadiran: null
+                        });
+                    }
                 }
+                await SlotAgendaStaff.bulkCreate(staffAssignments, { transaction });
             }
 
-            await SlotAgendaStaff.bulkCreate(staffAssignments, { transaction });
-
             await transaction.commit();
-            return this.sendResponse(res, 201, true, 'Penugasan berhasil dibuat untuk seluruh slot agenda', penugasan);
+            return this.sendResponse(res, 201, true, 'Penugasan berhasil dibuat', penugasan);
         } catch (error) {
             await transaction.rollback();
             return this.sendError(res, error, 'Error creating assignment');

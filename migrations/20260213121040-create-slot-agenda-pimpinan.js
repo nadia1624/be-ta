@@ -88,7 +88,7 @@ module.exports = {
     });
 
     await queryInterface.addConstraint('SlotAgendaPimpinans', {
-      fields: ['id_agenda', 'id_jabatan_diusulkan', 'id_periode_diusulkan'],
+      fields: ['id_agenda', 'tanggal', 'id_slot_waktu', 'id_jabatan_diusulkan', 'id_periode_diusulkan'],
       type: 'unique',
       name: 'uq_slot_agenda_diusulkan'
     });

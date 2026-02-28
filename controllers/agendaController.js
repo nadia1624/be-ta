@@ -54,7 +54,7 @@ class AgendaController extends BaseController {
         try {
             const {
                 nomor_surat, tanggal_surat, perihal,
-                nama_kegiatan, lokasi_kegiatan, contact_person, keterangan,
+                nama_kegiatan, lokasi_kegiatan,
                 invited_pimpinan, // Array of { id_jabatan, id_periode }
                 waktu_mulai, waktu_selesai, tanggal_kegiatan
             } = req.body;
@@ -87,9 +87,7 @@ class AgendaController extends BaseController {
                 waktu_mulai,
                 waktu_selesai,
                 nama_kegiatan,
-                lokasi_kegiatan,
-                contact_person,
-                keterangan
+                lokasi_kegiatan
             }, { transaction });
 
             const isSespri = req.user.nama_role === 'Sespri';
