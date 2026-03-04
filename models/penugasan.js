@@ -60,6 +60,11 @@ module.exports = (sequelize, DataTypes) => {
     tanggal_penugasan: {
       type: DataTypes.DATEONLY,
       allowNull: true
+    },
+    status: {
+      type: DataTypes.ENUM('pending', 'progress', 'selesai'),
+      allowNull: true,
+      defaultValue: null
     }
   }, {
     sequelize,

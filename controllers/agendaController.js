@@ -597,23 +597,13 @@ class AgendaController extends BaseController {
                 const actualJabatan = status_kehadiran === 'hadir' ? id_jabatan : id_jabatan_perwakilan;
                 const actualPeriode = status_kehadiran === 'hadir' ? id_periode : id_periode_perwakilan;
 
+                // Overlap condition: slot overlaps agenda if slot_start < agenda_end AND slot_end > agenda_start
                 const slots = await SlotWaktu.findAll({
                     where: {
-                        [Op.or]: [
-                            {
-                                slot_waktu_mulai: { [Op.lte]: agenda.waktu_mulai },
-                                slot_waktu_selesai: { [Op.gt]: agenda.waktu_mulai }
-                            },
-                            {
-                                slot_waktu_mulai: { [Op.lt]: agenda.waktu_selesai },
-                                slot_waktu_selesai: { [Op.gte]: agenda.waktu_selesai }
-                            },
-                            {
-                                slot_waktu_mulai: { [Op.gte]: agenda.waktu_mulai },
-                                slot_waktu_selesai: { [Op.lte]: agenda.waktu_selesai }
-                            }
-                        ]
+                        slot_waktu_mulai: { [Op.lt]: agenda.waktu_selesai },
+                        slot_waktu_selesai: { [Op.gt]: agenda.waktu_mulai }
                     },
+                    order: [['slot_waktu_mulai', 'ASC']],
                     transaction
                 });
 

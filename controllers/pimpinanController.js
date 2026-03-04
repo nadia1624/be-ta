@@ -128,22 +128,24 @@ class PimpinanController extends BaseController {
             const { PimpinanAjudan } = require('../models');
 
             const whereClause = { status_aktif: 'aktif' };
-            const pimpinanAjudanInclude = { model: PimpinanAjudan, as: 'pimpinanAjudans' };
+            const include = [
+                { model: Pimpinan, as: 'pimpinan' },
+                { model: Periode, as: 'periode' },
+                { model: JabatanPimpinan, as: 'jabatan' }
+            ];
 
-            // If Ajudan, only get their assigned leaders
+            // Only include PimpinanAjudan relation if user is an Ajudan
             if (nama_role === 'Ajudan') {
-                pimpinanAjudanInclude.where = { id_user_ajudan: id_user };
-                pimpinanAjudanInclude.required = true;
+                include.push({
+                    model: PimpinanAjudan,
+                    as: 'pimpinanAjudans',
+                    where: { id_user_ajudan: id_user }
+                });
             }
 
             const data = await PeriodeJabatan.findAll({
                 where: whereClause,
-                include: [
-                    { model: Pimpinan, as: 'pimpinan' },
-                    { model: Periode, as: 'periode' },
-                    { model: JabatanPimpinan, as: 'jabatan' },
-                    pimpinanAjudanInclude
-                ],
+                include: include,
                 order: [[{ model: Pimpinan, as: 'pimpinan' }, 'nama_pimpinan', 'ASC']]
             });
             return this.sendResponse(res, 200, true, 'Data active assignments berhasil diambil', data);

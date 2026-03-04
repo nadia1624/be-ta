@@ -41,6 +41,11 @@ module.exports = {
         type: Sequelize.DATEONLY,
         allowNull: true
       },
+      status: {
+        type: Sequelize.ENUM('pending', 'progress', 'selesai'),
+        allowNull: true,
+        defaultValue: null
+      },
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE,
