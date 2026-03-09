@@ -16,7 +16,10 @@ const storage = multer.diskStorage({
     }
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
+});
 
 router.post('/', authenticateToken, upload.single('surat_permohonan'), agendaController.createAgenda);
 router.put('/:id_agenda', authenticateToken, upload.single('surat_permohonan'), agendaController.updateAgenda);

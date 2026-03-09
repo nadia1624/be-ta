@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const BaseController = require('./BaseController');
-const { Penugasan, SlotAgendaStaff, SlotAgendaPimpinan, AgendaPimpinan, User, Role, Agenda, StatusAgenda, SlotWaktu, PeriodeJabatan, Pimpinan, Periode, JabatanPimpinan, LaporanKegiatan, sequelize } = require('../models');
+const { Penugasan, SlotAgendaStaff, SlotAgendaPimpinan, AgendaPimpinan, User, Role, Agenda, StatusAgenda, SlotWaktu, PeriodeJabatan, Pimpinan, Periode, JabatanPimpinan, LaporanKegiatan, DraftBerita, DokumentasiBerita, RevisiDraftBerita, sequelize } = require('../models');
 
 class PenugasanController extends BaseController {
     /**
@@ -28,7 +28,7 @@ class PenugasanController extends BaseController {
                     { 
                         model: Role, 
                         as: 'role',
-                        where: { nama_role: 'Staff Protokol' }
+                        where: { nama_role: { [Op.in]: ['Staff Protokol', 'Staf Protokol'] } }
                     }
                 ],
                 attributes: ['id_user', 'nama', 'email']
@@ -36,6 +36,24 @@ class PenugasanController extends BaseController {
             return this.sendResponse(res, 200, true, 'Data staff protokol berhasil diambil', staffProtokol);
         } catch (error) {
             return this.sendError(res, error, 'Error fetching staff protokol');
+        }
+    }
+
+    async getStaffMedia(req, res) {
+        try {
+            const staffMedia = await User.findAll({
+                include: [
+                    { 
+                        model: Role, 
+                        as: 'role',
+                        where: { nama_role: { [Op.in]: ['Staff Media', 'Staf Media'] } }
+                    }
+                ],
+                attributes: ['id_user', 'nama', 'email']
+            });
+            return this.sendResponse(res, 200, true, 'Data staff media berhasil diambil', staffMedia);
+        } catch (error) {
+            return this.sendError(res, error, 'Error fetching staff media');
         }
     }
 
@@ -88,6 +106,55 @@ class PenugasanController extends BaseController {
         }
     }
 
+    async getAgendasForMediaAssignment(req, res) {
+        try {
+            // Agenda eligible for assignment:
+            // 1. At least one AgendaPimpinan has status_kehadiran = 'hadir' or 'diwakilkan'
+            // 2. No Penugasan (media) exists yet for this agenda
+            const agendas = await Agenda.findAll({
+                where: {
+                    id_agenda: {
+                        // Must have at least one confirmed pimpinan (hadir or diwakilkan)
+                        [Op.in]: sequelize.literal(`(
+                            SELECT DISTINCT "id_agenda"
+                            FROM "AgendaPimpinans"
+                            WHERE "status_kehadiran" IN ('hadir', 'diwakilkan')
+                        )`),
+                        // Must NOT already have a media assignment
+                        [Op.notIn]: sequelize.literal(`(
+                            SELECT DISTINCT "id_agenda"
+                            FROM "Penugasans"
+                            WHERE "jenis_penugasan" = 'media'
+                            AND "id_agenda" IS NOT NULL
+                        )`)
+                    }
+                },
+                include: [
+                    {
+                        model: AgendaPimpinan,
+                        as: 'agendaPimpinans',
+                        required: true,
+                        where: { status_kehadiran: { [Op.in]: ['hadir', 'diwakilkan'] } },
+                        include: [
+                            {
+                                model: PeriodeJabatan,
+                                as: 'periodeJabatan',
+                                include: [
+                                    { model: Pimpinan, as: 'pimpinan' }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                order: [['tanggal_kegiatan', 'ASC']]
+            });
+
+            return this.sendResponse(res, 200, true, 'Data agenda untuk penugasan media berhasil diambil', agendas);
+        } catch (error) {
+            return this.sendError(res, error, 'Error fetching agendas for media assignment');
+        }
+    }
+
     async assignStaff(req, res) {
         const transaction = await sequelize.transaction();
         try {
@@ -136,15 +203,24 @@ class PenugasanController extends BaseController {
                 transaction
             });
 
+            const { id_user, nama_role } = req.user;
             const id_penugasan = await this.generatePenugasanId();
-            const id_user_kasubag = req.user.id_user;
+            const id_user_kasubag = id_user;
+            
+            // Determine jenis_penugasan based on role if not provided
+            let jenis_penugasan = req.body.jenis_penugasan;
+            if (!jenis_penugasan) {
+                if (nama_role === 'Kasubag Media') jenis_penugasan = 'media';
+                else if (nama_role === 'Kasubag Protokol') jenis_penugasan = 'protokol';
+                else jenis_penugasan = 'protokol'; // Default
+            }
 
             // Create Penugasan record with id_agenda
             const penugasan = await Penugasan.create({
                 id_penugasan,
                 id_agenda,
                 id_user_kasubag,
-                jenis_penugasan: 'protokol',
+                jenis_penugasan,
                 deskripsi_penugasan,
                 tanggal_penugasan: new Date(),
                 status: 'pending'
@@ -177,9 +253,13 @@ class PenugasanController extends BaseController {
     async getMyPenugasan(req, res) {
         try {
             const { id_user, nama_role } = req.user;
-            const isStaff = nama_role === 'Staff Protokol' || nama_role === 'Staf Protokol';
+            const isMedia = nama_role === 'Kasubag Media' || nama_role === 'Staff Media' || nama_role === 'Staf Media';
+            const isStaff = nama_role === 'Staff Protokol' || nama_role === 'Staf Protokol' || nama_role === 'Staff Media' || nama_role === 'Staf Media';
 
-            let whereClause = { jenis_penugasan: 'protokol' };
+            let whereClause = { 
+                jenis_penugasan: isMedia ? 'media' : 'protokol' 
+            };
+            
             if (isStaff) {
                 // Find all penugasan IDs where this staff member is assigned
                 const assignedPenugasans = await SlotAgendaStaff.findAll({
@@ -233,6 +313,14 @@ class PenugasanController extends BaseController {
                         include: [
                             { model: User, as: 'staff', attributes: ['id_user', 'nama'] }
                         ]
+                    },
+                    {
+                        model: DraftBerita,
+                        as: 'draftBeritas',
+                        include: [
+                            { model: DokumentasiBerita, as: 'dokumentasis' },
+                            { model: RevisiDraftBerita, as: 'revisies' }
+                        ]
                     }
                 ],
                 order: [['tanggal_penugasan', 'DESC']]
@@ -282,10 +370,13 @@ class PenugasanController extends BaseController {
         try {
             const { id } = req.params;
             const { id_user, nama_role } = req.user;
-            const isStaff = nama_role === 'Staff Protokol' || nama_role === 'Staf Protokol';
+            const isMonitoringRole = ['Kasubag Media', 'Staff Media', 'Staf Media', 'Sespri', 'Admin'].includes(nama_role);
+            const isStaffProtokol = nama_role === 'Staff Protokol' || nama_role === 'Staf Protokol';
 
             let whereClause = { id_penugasan: id };
-            if (!isStaff) {
+            // Original logic restricted non-staff to their own created assignments.
+            // We relax this for monitoring roles.
+            if (!isStaffProtokol && !isMonitoringRole) {
                 whereClause.id_user_kasubag = id_user;
             }
 
@@ -330,6 +421,14 @@ class PenugasanController extends BaseController {
                             { model: User, as: 'staff', attributes: ['id_user', 'nama'] }
                         ],
                         order: [['createdAt', 'ASC']]
+                    },
+                    {
+                        model: DraftBerita,
+                        as: 'draftBeritas',
+                        include: [
+                            { model: DokumentasiBerita, as: 'dokumentasis' },
+                            { model: RevisiDraftBerita, as: 'revisies' }
+                        ]
                     }
                 ]
             });
@@ -339,15 +438,21 @@ class PenugasanController extends BaseController {
             }
 
             // Access control check
-            if (!isStaff) {
-                if (penugasan.id_user_kasubag !== id_user) {
+            if (isMonitoringRole) {
+                // Monitoring roles can view protocol assignments
+                if (penugasan.jenis_penugasan !== 'protokol' && penugasan.id_user_kasubag !== id_user) {
                     return this.sendResponse(res, 403, false, 'Anda tidak memiliki akses ke penugasan ini');
                 }
-            } else {
-                // Staff can only see it if they are assigned to at least one slot
+            } else if (isStaffProtokol) {
+                // Staff Protokol can only see it if they are assigned to at least one slot
                 const isAssigned = penugasan.slotAgendaStaffs.some(s => String(s.id_user_staff) === String(id_user));
                 if (!isAssigned) {
                     return this.sendResponse(res, 403, false, 'Anda tidak terdaftar dalam penugasan ini');
+                }
+            } else {
+                // Other Kasubags (e.g. Kasubag Protokol) can only see what they created
+                if (penugasan.id_user_kasubag !== id_user) {
+                    return this.sendResponse(res, 403, false, 'Anda tidak memiliki akses ke penugasan ini');
                 }
             }
 
@@ -416,6 +521,77 @@ class PenugasanController extends BaseController {
             });
         } catch (error) {
             return this.sendError(res, error, 'Error updating status penugasan');
+        }
+    }
+
+    async getProtokolAssignments(req, res) {
+        try {
+            const penugasanList = await Penugasan.findAll({
+                where: { jenis_penugasan: 'protokol' },
+                include: [
+                    {
+                        model: Agenda,
+                        as: 'agenda',
+                        attributes: ['id_agenda', 'nama_kegiatan', 'tanggal_kegiatan', 'waktu_mulai', 'waktu_selesai', 'lokasi_kegiatan'],
+                        include: [
+                            {
+                                model: AgendaPimpinan,
+                                as: 'agendaPimpinans',
+                                where: { status_kehadiran: { [Op.in]: ['hadir', 'diwakilkan'] } },
+                                required: false,
+                                include: [
+                                    {
+                                        model: PeriodeJabatan,
+                                        as: 'periodeJabatan',
+                                        include: [
+                                            { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] },
+                                            { model: JabatanPimpinan, as: 'jabatan', attributes: ['nama_jabatan'] }
+                                        ],
+                                    },
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        model: SlotAgendaStaff,
+                        as: 'slotAgendaStaffs',
+                        include: [
+                            { model: User, as: 'staff', attributes: ['id_user', 'nama'] },
+                            { model: SlotWaktu, as: 'slotWaktu', attributes: ['slot_waktu_mulai', 'slot_waktu_selesai'] }
+                        ]
+                    },
+                    {
+                        model: LaporanKegiatan,
+                        as: 'laporanKegiatans',
+                        include: [
+                            { model: User, as: 'staff', attributes: ['id_user', 'nama'] }
+                        ]
+                    }
+                ],
+                order: [['tanggal_penugasan', 'DESC']]
+            });
+
+            const result = penugasanList.map(p => {
+                const plain = p.toJSON();
+                let status_pelaksanaan = plain.status === 'selesai' ? 'Selesai' : plain.status === 'progress' ? 'Berlangsung' : 'Belum Dimulai';
+                
+                const staffMap = {};
+                (plain.slotAgendaStaffs || []).forEach(s => {
+                    if (s.staff) staffMap[s.staff.id_user] = s.staff.nama;
+                });
+                const nama_staf = Object.values(staffMap);
+
+                const pimpinans = (plain.agenda?.agendaPimpinans || []).map(ap => ({
+                    nama_pimpinan: ap.periodeJabatan?.pimpinan?.nama_pimpinan || '-',
+                    nama_jabatan: ap.periodeJabatan?.jabatan?.nama_jabatan || '-'
+                }));
+
+                return { ...plain, status_pelaksanaan, nama_staf, pimpinans };
+            });
+
+            return this.sendResponse(res, 200, true, 'Data penugasan protokol berhasil diambil', result);
+        } catch (error) {
+            return this.sendError(res, error, 'Error fetching protokol assignments');
         }
     }
 }

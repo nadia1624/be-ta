@@ -24,7 +24,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    limits: { fileSize: 20 * 1024 * 1024 }, // Increase to 20MB limit
     fileFilter: (req, file, cb) => {
         const allowed = ['.jpg', '.jpeg', '.png', '.pdf'];
         const ext = path.extname(file.originalname).toLowerCase();
@@ -49,7 +49,7 @@ router.post(
 router.get(
     '/penugasan/:id_penugasan',
     authenticateToken,
-    authorizeRoles('Kasubag Protokol', 'Staff Protokol'),
+    authorizeRoles('Kasubag Protokol', 'Staff Protokol','Staff Media', 'Kasubag Media'),
     laporanKegiatanController.getLaporanByPenugasan
 );
 
