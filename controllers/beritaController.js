@@ -7,22 +7,66 @@ class BeritaController extends BaseController {
      */
     async getPublicBerita(req, res) {
         try {
-            const berita = await DraftBerita.findAll({
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const offset = (page - 1) * limit;
+
+            const { count, rows: berita } = await DraftBerita.findAndCountAll({
                 where: { status_draft: 'approved' },
                 include: [
                     {
                         model: DokumentasiBerita,
-                        as: 'dokumentasis',
-                        limit: 1
+                        as: 'dokumentasis'
                     }
                 ],
                 order: [['tanggal_kirim', 'DESC']],
-                limit: 6
+                limit: limit,
+                offset: offset,
+                distinct: true // Important when using findAndCountAll with includes
             });
 
-            return this.sendResponse(res, 200, true, 'Berita berhasil diambil', berita);
+            return this.sendResponse(res, 200, true, 'Berita berhasil diambil', {
+                data: berita,
+                pagination: {
+                    totalItems: count,
+                    totalPages: Math.ceil(count / limit),
+                    currentPage: page,
+                    limit: limit
+                }
+            });
         } catch (error) {
             return this.sendError(res, error, 'Gagal mengambil berita');
+        }
+    }
+
+    /**
+     * Get approved berita detail for public page
+     */
+    async getPublicBeritaDetail(req, res) {
+        try {
+            const { id } = req.params;
+            const berita = await DraftBerita.findOne({
+                where: { id_draft_berita: id, status_draft: 'approved' },
+                include: [
+                    {
+                        model: DokumentasiBerita,
+                        as: 'dokumentasis'
+                    },
+                    {
+                        model: User,
+                        as: 'staff',
+                        attributes: ['nama']
+                    }
+                ]
+            });
+
+            if (!berita) {
+                return this.sendResponse(res, 404, false, 'Berita tidak ditemukan');
+            }
+
+            return this.sendResponse(res, 200, true, 'Detail berita berhasil diambil', berita);
+        } catch (error) {
+            return this.sendError(res, error, 'Gagal mengambil detail berita');
         }
     }
 

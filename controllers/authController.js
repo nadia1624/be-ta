@@ -120,14 +120,142 @@ class AuthController extends BaseController {
                     attributes: ['id_role', 'nama_role']
                 }]
             });
+            if (!user) {
+                return this.sendResponse(res, 404, false, 'User tidak ditemukan');
+            }
+            return this.sendResponse(res, 200, true, 'User berhasil ditemukan', user);
+        } catch (error) {
+            return this.sendError(res, error, 'GetMe error');
+        }
+    }
 
+    async updateProfile(req, res) {
+        try {
+            const id_user = req.user.id_user;
+            const { nama, email, no_hp } = req.body;
+
+            const user = await User.findByPk(id_user);
             if (!user) {
                 return this.sendResponse(res, 404, false, 'User tidak ditemukan');
             }
 
-            return this.sendResponse(res, 200, true, 'Data user berhasil diambil', user);
+            // Check if email is already taken by another user
+            if (email && email !== user.email) {
+                const existing = await User.findOne({ where: { email } });
+                if (existing) {
+                    return this.sendResponse(res, 400, false, 'Email sudah digunakan oleh akun lain');
+                }
+            }
+
+            if (nama !== undefined) user.nama = nama;
+            if (email !== undefined) user.email = email;
+            if (no_hp !== undefined) user.no_hp = no_hp;
+
+            await user.save();
+
+            const updated = await User.findByPk(id_user, {
+                attributes: { exclude: ['password'] },
+                include: [{ model: Role, as: 'role', attributes: ['id_role', 'nama_role'] }]
+            });
+
+            return this.sendResponse(res, 200, true, 'Profil berhasil diperbarui', updated);
         } catch (error) {
-            return this.sendError(res, error, 'GetMe error');
+            return this.sendError(res, error, 'UpdateProfile error');
+        }
+    }
+
+    async changePassword(req, res) {
+        try {
+            const id_user = req.user.id_user;
+            const { current_password, new_password } = req.body;
+
+            if (!current_password || !new_password) {
+                return this.sendResponse(res, 400, false, 'Password saat ini dan password baru wajib diisi');
+            }
+
+            if (new_password.length < 8) {
+                return this.sendResponse(res, 400, false, 'Password baru minimal 8 karakter');
+            }
+
+            const user = await User.findByPk(id_user);
+            if (!user) {
+                return this.sendResponse(res, 404, false, 'User tidak ditemukan');
+            }
+
+            const isValid = await bcrypt.compare(current_password, user.password);
+            if (!isValid) {
+                return this.sendResponse(res, 400, false, 'Password saat ini tidak sesuai');
+            }
+
+            user.password = await bcrypt.hash(new_password, 10);
+            await user.save();
+
+            return this.sendResponse(res, 200, true, 'Password berhasil diubah');
+        } catch (error) {
+            return this.sendError(res, error, 'ChangePassword error');
+        }
+    }
+
+    async uploadFoto(req, res) {
+        try {
+            if (!req.file) {
+                return this.sendResponse(res, 400, false, 'Tidak ada file yang diunggah');
+            }
+
+            const id_user = req.user.id_user;
+            const user = await User.findByPk(id_user);
+            if (!user) {
+                return this.sendResponse(res, 404, false, 'User tidak ditemukan');
+            }
+
+            // Delete old photo if exists
+            if (user.foto_profil) {
+                const fs = require('fs');
+                const path = require('path');
+                const oldPath = path.join(__dirname, '../uploads/profile', user.foto_profil.split('/').pop());
+                if (fs.existsSync(oldPath)) {
+                    fs.unlinkSync(oldPath);
+                }
+            }
+
+            // Save new filename
+            user.foto_profil = `/api/uploads/profile/${req.file.filename}`;
+            await user.save();
+
+            return this.sendResponse(res, 200, true, 'Foto profil berhasil diperbarui', {
+                foto_profil: user.foto_profil
+            });
+        } catch (error) {
+            return this.sendError(res, error, 'UploadFoto error');
+        }
+    }
+
+    async deleteFoto(req, res) {
+        try {
+            const id_user = req.user.id_user;
+            const user = await User.findByPk(id_user);
+            if (!user) {
+                return this.sendResponse(res, 404, false, 'User tidak ditemukan');
+            }
+
+            if (!user.foto_profil) {
+                return this.sendResponse(res, 400, false, 'Tidak ada foto profil untuk dihapus');
+            }
+
+            // Delete file from disk
+            const fs = require('fs');
+            const path = require('path');
+            const filePath = path.join(__dirname, '../uploads/profile', user.foto_profil.split('/').pop());
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
+
+            user.foto_profil = null;
+            await user.save();
+
+            return this.sendResponse(res, 200, true, 'Foto profil berhasil dihapus');
+        } catch (error) {
+            return this.sendError(res, error, 'DeleteFoto error');
         }
     }
 }

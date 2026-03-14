@@ -1,5 +1,5 @@
 const BaseController = require('./BaseController');
-const { Pimpinan, PeriodeJabatan, JabatanPimpinan, Periode } = require('../models');
+const { Pimpinan, PeriodeJabatan, PimpinanAjudan, JabatanPimpinan, Periode } = require('../models');
 
 class PimpinanController extends BaseController {
     /**
@@ -125,8 +125,7 @@ class PimpinanController extends BaseController {
     async getActiveAssignments(req, res) {
         try {
             const { nama_role, id_user } = req.user;
-            const { PimpinanAjudan } = require('../models');
-
+            
             const whereClause = { status_aktif: 'aktif' };
             const include = [
                 { model: Pimpinan, as: 'pimpinan' },

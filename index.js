@@ -29,6 +29,7 @@ app.use('/api/agenda', require('./routes/agendaRoutes'));
 app.use('/api/berita', require('./routes/beritaRoutes'));
 app.use('/api/penugasan', require('./routes/penugasanRoutes'));
 app.use('/api/laporan-kegiatan', require('./routes/laporanKegiatanRoutes'));
+app.use('/api/dashboards', require('./routes/dashboardRoutes'));
 
 // Health check
 app.get('/', (req, res) => {

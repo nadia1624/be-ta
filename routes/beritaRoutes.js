@@ -37,6 +37,7 @@ const upload = multer({
 });
 
 router.get('/public', beritaController.getPublicBerita);
+router.get('/public/:id', beritaController.getPublicBeritaDetail);
 
 // Routes for Kasubag Media
 router.get('/drafts-review', authenticateToken, authorizeRoles('Kasubag Media'), beritaController.getDraftsReview);

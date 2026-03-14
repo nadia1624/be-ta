@@ -365,7 +365,8 @@ class AgendaController extends BaseController {
             }
 
             const { nama_role, id_user } = req.user;
-            const pimpinanIncludeWhere = {};
+            const agendaWhere = { ...whereClause };
+            let pimpinanFilter = null;
 
             // If Ajudan, restrict to their assigned leaders
             if (nama_role === 'Ajudan') {
@@ -377,31 +378,36 @@ class AgendaController extends BaseController {
 
                 if (assignments.length > 0) {
                     if (id_jabatan) {
-                        // Check if trying to filter by an authorized leader
                         const authorized = assignments.find(a => a.id_jabatan === id_jabatan);
                         if (!authorized) {
                             return this.sendResponse(res, 403, false, 'Anda tidak memiliki akses monitoring untuk pimpinan ini', []);
                         }
-                        pimpinanIncludeWhere.id_jabatan = id_jabatan;
-                        pimpinanIncludeWhere.id_periode = authorized.id_periode;
+                        pimpinanFilter = [{ id_jabatan, id_periode: authorized.id_periode }];
                     } else {
-                        // Precise filtering using authorized pairs
-                        pimpinanIncludeWhere[Op.or] = assignments.map(a => ({
-                            id_jabatan: a.id_jabatan,
-                            id_periode: a.id_periode
-                        }));
+                        pimpinanFilter = assignments.map(a => ({ id_jabatan: a.id_jabatan, id_periode: a.id_periode }));
                     }
                 } else {
-                    // No assignments, return empty list
                     return this.sendResponse(res, 200, true, 'Data agenda pimpinan berhasil diambil (kosong)', []);
                 }
             } else {
-                if (id_jabatan) pimpinanIncludeWhere.id_jabatan = id_jabatan;
-                if (id_periode) pimpinanIncludeWhere.id_periode = id_periode;
+                if (id_jabatan) pimpinanFilter = [{ id_jabatan, id_periode }];
+            }
+
+            if (pimpinanFilter) {
+                agendaWhere[Op.or] = [
+                    {
+                        '$agendaPimpinans.id_jabatan$': { [Op.in]: pimpinanFilter.map(p => p.id_jabatan) },
+                        '$agendaPimpinans.id_periode$': { [Op.in]: pimpinanFilter.map(p => p.id_periode) }
+                    },
+                    {
+                        '$slotAgendaPimpinans.id_jabatan_hadir$': { [Op.in]: pimpinanFilter.map(p => p.id_jabatan) },
+                        '$slotAgendaPimpinans.id_periode_hadir$': { [Op.in]: pimpinanFilter.map(p => p.id_periode) }
+                    }
+                ];
             }
 
             const agendas = await Agenda.findAll({
-                where: whereClause,
+                where: agendaWhere,
                 include: [
                     {
                         model: StatusAgenda,
@@ -417,7 +423,7 @@ class AgendaController extends BaseController {
                     {
                         model: AgendaPimpinan,
                         as: 'agendaPimpinans',
-                        where: Object.keys(pimpinanIncludeWhere).length > 0 ? pimpinanIncludeWhere : undefined,
+                        required: false,
                         include: [
                             {
                                 model: PeriodeJabatan,
@@ -432,8 +438,17 @@ class AgendaController extends BaseController {
                     {
                         model: SlotAgendaPimpinan,
                         as: 'slotAgendaPimpinans',
+                        required: false,
                         include: [
-                            { model: SlotWaktu, as: 'slotWaktu' }
+                            { model: SlotWaktu, as: 'slotWaktu' },
+                            {
+                                model: PeriodeJabatan,
+                                as: 'periodeJabatanDiusulkan',
+                                include: [
+                                    { model: JabatanPimpinan, as: 'jabatan' },
+                                    { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                                ]
+                            }
                         ]
                     }
                 ],

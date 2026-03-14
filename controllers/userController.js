@@ -3,9 +3,7 @@ const { User, Role, PimpinanAjudan, PeriodeJabatan, Pimpinan, Periode } = requir
 const bcrypt = require('bcryptjs');
 
 class UserController extends BaseController {
-    /**
-     * Helper to generate User ID
-     */
+
     async generateUserId() {
         const lastUser = await User.findOne({ 
             order: [['id_user', 'DESC']],

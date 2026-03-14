@@ -22,13 +22,13 @@ router.post('/assign', authenticateToken, authorizeRoles('Kasubag Protokol', 'Ka
 router.get('/my-penugasan', authenticateToken, authorizeRoles('Kasubag Protokol', 'Staff Protokol', 'Kasubag Media', 'Staff Media'), PenugasanController.getMyPenugasan);
 
 // Get all protokol assignments for media roles
-router.get('/protokol-assignments', authenticateToken, authorizeRoles('Kasubag Media', 'Staff Media'), PenugasanController.getProtokolAssignments);
+router.get('/protokol-assignments', authenticateToken, authorizeRoles('Kasubag Media', 'Staff Media','Sespri'), PenugasanController.getProtokolAssignments);
 
 // Mark a penugasan as reviewed (selesai) by kasubag
 router.patch('/:id/review', authenticateToken, authorizeRoles('Kasubag Protokol', 'Kasubag Media'), PenugasanController.updateStatusPenugasan);
 
 // Get detail of a specific penugasan (consolidated for all roles)
-router.get('/:id', authenticateToken, authorizeRoles('Kasubag Protokol', 'Staff Protokol', 'Kasubag Media', 'Staff Media'), PenugasanController.getPenugasanDetail);
+router.get('/:id', authenticateToken, authorizeRoles('Kasubag Protokol', 'Staff Protokol', 'Kasubag Media', 'Staff Media', 'Sespri'), PenugasanController.getPenugasanDetail);
 
 
 module.exports = router;
