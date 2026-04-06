@@ -1,5 +1,5 @@
 const BaseController = require('./BaseController');
-const { User, Agenda, StatusAgenda, Penugasan, LaporanKegiatan, AgendaPimpinan, PeriodeJabatan, JabatanPimpinan, Pimpinan, sequelize } = require('../models');
+const { User, Agenda, StatusAgenda, Penugasan, LaporanKegiatan, AgendaPimpinan, SlotAgendaPimpinan, SlotWaktu, PeriodeJabatan, JabatanPimpinan, Pimpinan, DraftBerita, SlotAgendaStaff, sequelize } = require('../models');
 const { Op } = require('sequelize');
 
 class DashboardController extends BaseController {
@@ -103,6 +103,30 @@ class DashboardController extends BaseController {
                             {
                                 model: PeriodeJabatan,
                                 as: 'periodeJabatan',
+                                include: [
+                                    { model: JabatanPimpinan, as: 'jabatan' },
+                                    { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        model: SlotAgendaPimpinan,
+                        as: 'slotAgendaPimpinans',
+                        required: false,
+                        include: [
+                            { model: SlotWaktu, as: 'slotWaktu' },
+                            {
+                                model: PeriodeJabatan,
+                                as: 'periodeJabatanDiusulkan',
+                                include: [
+                                    { model: JabatanPimpinan, as: 'jabatan' },
+                                    { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                                ]
+                            },
+                            {
+                                model: PeriodeJabatan,
+                                as: 'periodeJabatanHadir',
                                 include: [
                                     { model: JabatanPimpinan, as: 'jabatan' },
                                     { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
@@ -243,6 +267,30 @@ class DashboardController extends BaseController {
                         }]
                     },
                     {
+                        model: SlotAgendaPimpinan,
+                        as: 'slotAgendaPimpinans',
+                        required: false,
+                        include: [
+                            { model: SlotWaktu, as: 'slotWaktu' },
+                            {
+                                model: PeriodeJabatan,
+                                as: 'periodeJabatanDiusulkan',
+                                include: [
+                                    { model: JabatanPimpinan, as: 'jabatan' },
+                                    { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                                ]
+                            },
+                            {
+                                model: PeriodeJabatan,
+                                as: 'periodeJabatanHadir',
+                                include: [
+                                    { model: JabatanPimpinan, as: 'jabatan' },
+                                    { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                                ]
+                            }
+                        ]
+                    },
+                    {
                         model: Penugasan,
                         as: 'penugasans',
                         include: [{
@@ -307,23 +355,7 @@ class DashboardController extends BaseController {
                     rejected,
                     totalProcessed
                 },
-                todayAgendas: todayAgendas.map(a => ({
-                    id: a.id_agenda,
-                    kegiatan: a.nama_kegiatan,
-                    pimpinan: a.agendaPimpinans?.[0]?.periodeJabatan?.pimpinan?.nama_pimpinan || '-',
-                    jabatan: a.agendaPimpinans?.[0]?.periodeJabatan?.jabatan?.nama_jabatan || '-',
-                    waktu: `${a.waktu_mulai} - ${a.waktu_selesai}`,
-                    tempat: a.lokasi_kegiatan,
-                    status: a.statusAgendas?.[0]?.status_agenda === 'completed' ? 'Selesai' : 
-                            a.statusAgendas?.[0]?.status_agenda === 'delegated' ? 'Diwakilkan' : 'Berlangsung',
-                    progress_reports: a.penugasans?.flatMap(p => p.laporanKegiatans?.map(l => ({
-                        id: l.id_laporan,
-                        tipe: l.deskripsi_laporan,
-                        deskripsi: l.catatan_laporan,
-                        foto: l.dokumentasi_laporan ? l.dokumentasi_laporan.split(',').length : 0,
-                        waktu: new Date(l.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-                    }))) || []
-                })),
+                todayAgendas,
                 pendingRequests: pendingRequests.map(r => ({
                     nomor_surat: r.nomor_surat,
                     pemohon: r.pemohon?.nama || 'Unknown',
@@ -341,6 +373,675 @@ class DashboardController extends BaseController {
             return this.sendResponse(res, 200, true, 'Data dashboard sespri berhasil diambil', dashboardData);
         } catch (error) {
             return this.sendError(res, error, 'Gagal mengambil data dashboard sespri');
+    }
+    }
+    async getKasubagMediaStats(req, res) {
+        try {
+            const today = new Date().toISOString().split('T')[0];
+            const currentMonth = new Date().getMonth();
+            const currentYear = new Date().getFullYear();
+
+            // 1. Stats Cards data
+            const staffList = await User.findAll({
+                where: { id_role: 'R006' }, // Role R006 is Staff Media
+                attributes: ['id_user', 'nama']
+            });
+            const totalStaff = staffList.length;
+
+            const reviewDraftsCount = await DraftBerita.count({
+                where: { status_draft: 'draft' }
+            });
+
+            const approvedDraftsCount = await DraftBerita.count({
+                where: { status_draft: 'approved' }
+            });
+
+            const activeAssignmentsCount = await Penugasan.count({
+                where: {
+                    status: { [Op.ne]: 'selesai' },
+                    id_user_kasubag: req.user.id_user // Correct column name
+                }
+            });
+
+            // 2. Today's Agendas
+            const todayAgendas = await Agenda.findAll({
+                where: { 
+                    tanggal_kegiatan: today,
+                    id_agenda: {
+                        [Op.in]: sequelize.literal(`(
+                            SELECT sa1.id_agenda
+                            FROM "StatusAgenda" sa1
+                            WHERE sa1.id_status_agenda = (
+                                SELECT sa2.id_status_agenda
+                                FROM "StatusAgenda" sa2
+                                WHERE sa2.id_agenda = sa1.id_agenda
+                                ORDER BY sa2."createdAt" DESC
+                                LIMIT 1
+                            )
+                            AND sa1.status_agenda IN ('approved_sespri', 'approved_ajudan', 'delegated', 'completed')
+                        )`)
+                    }
+                },
+                include: [
+                    {
+                        model: StatusAgenda,
+                        as: 'statusAgendas',
+                        required: true,
+                        limit: 1,
+                        order: [['createdAt', 'DESC']]
+                    },
+                    {
+                        model: AgendaPimpinan,
+                        as: 'agendaPimpinans',
+                        include: [{
+                            model: PeriodeJabatan,
+                            as: 'periodeJabatan',
+                            include: [
+                                { model: JabatanPimpinan, as: 'jabatan' },
+                                { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                            ]
+                        }]
+                    },
+                    {
+                        model: SlotAgendaPimpinan,
+                        as: 'slotAgendaPimpinans',
+                        required: false,
+                        include: [
+                            { model: SlotWaktu, as: 'slotWaktu' },
+                            {
+                                model: PeriodeJabatan,
+                                as: 'periodeJabatanDiusulkan',
+                                include: [
+                                    { model: JabatanPimpinan, as: 'jabatan' },
+                                    { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                                ]
+                            },
+                            {
+                                model: PeriodeJabatan,
+                                as: 'periodeJabatanHadir',
+                                include: [
+                                    { model: JabatanPimpinan, as: 'jabatan' },
+                                    { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        model: Penugasan,
+                        as: 'penugasans',
+                        include: [{
+                            model: LaporanKegiatan,
+                            as: 'laporanKegiatans',
+                            attributes: ['id_laporan', 'deskripsi_laporan', 'catatan_laporan', 'dokumentasi_laporan', 'createdAt']
+                        }]
+                    }
+                ]
+            });
+
+            const allAssignmentsThisMonth = await Penugasan.findAll({
+                where: {
+                    tanggal_penugasan: {
+                        [Op.gte]: new Date(currentYear, currentMonth, 1),
+                        [Op.lt]: new Date(currentYear, currentMonth + 1, 1)
+                    }
+                },
+                include: [{
+                    model: SlotAgendaStaff,
+                    as: 'slotAgendaStaffs',
+                    attributes: ['id_user_staff']
+                }]
+            });
+
+            const workload = staffList.map(staf => {
+                // A staff member has a task if they are assigned to at least one slot in a penugasan
+                const tasks = allAssignmentsThisMonth.filter(p => 
+                    p.slotAgendaStaffs.some(s => s.id_user_staff === staf.id_user)
+                );
+                const count = tasks.length;
+                return {
+                    nama: staf.nama,
+                    tugas: count,
+                    persentase: Math.min(Math.round((count / 10) * 100), 100)
+                };
+            }).sort((a, b) => b.tugas - a.tugas);
+
+            // 4. Draft Perlu Review
+            const draftPerluReview = await DraftBerita.findAll({
+                where: { status_draft: 'draft' },
+                limit: 5,
+                order: [['createdAt', 'DESC']],
+                include: [
+                    {
+                        model: User,
+                        as: 'staff',
+                        attributes: ['nama']
+                    }
+                ]
+            });
+
+            // 5. Perlu Penugasan
+            const agendasForAssign = await Agenda.findAll({
+                where: {
+                    tanggal_kegiatan: { [Op.gte]: today },
+                    id_agenda: {
+                        [Op.in]: sequelize.literal(`(
+                            SELECT sa1.id_agenda
+                            FROM "StatusAgenda" sa1
+                            WHERE sa1.id_status_agenda = (
+                                SELECT sa2.id_status_agenda
+                                FROM "StatusAgenda" sa2
+                                WHERE sa2.id_agenda = sa1.id_agenda
+                                ORDER BY sa2."createdAt" DESC
+                                LIMIT 1
+                            )
+                            AND sa1.status_agenda IN ('approved_ajudan', 'delegated', 'completed')
+                            AND sa1.id_agenda NOT IN (SELECT id_agenda FROM "Penugasans" WHERE jenis_penugasan = 'media')
+                        )`)
+                    }
+                },
+                limit: 5,
+                order: [['tanggal_kegiatan', 'ASC'], ['waktu_mulai', 'ASC']]
+            });
+
+            const dashboardData = {
+                stats: {
+                    totalStaff,
+                    reviewDraftsCount,
+                    approvedDraftsCount,
+                    activeAssignments: activeAssignmentsCount
+                },
+                todayAgendas,
+                workload,
+                draftPerluReview,
+                perluPenugasan: agendasForAssign.map(a => ({
+                    id: a.id_agenda,
+                    kegiatan: a.nama_kegiatan,
+                    waktu: `${a.waktu_mulai.slice(0, 5)} - ${a.waktu_selesai.slice(0, 5)}`,
+                    tanggal: a.tanggal_kegiatan
+                }))
+            };
+
+            return this.sendResponse(res, 200, true, 'Data dashboard kasubag media berhasil diambil', dashboardData);
+        } catch (error) {
+            return this.sendError(res, error, 'Gagal mengambil data dashboard kasubag media');
+        }
+    }
+
+    async getKasubagProtokolStats(req, res) {
+        try {
+            const today = new Date().toISOString().split('T')[0];
+            const currentMonth = new Date().getMonth();
+            const currentYear = new Date().getFullYear();
+
+            // 1. Stats Cards data
+            const staffList = await User.findAll({
+                where: { id_role: 'R007' }, // Role R007 is Staff Protokol
+                attributes: ['id_user', 'nama']
+            });
+            const totalStaff = staffList.length;
+
+            const activeAssignmentsCount = await Penugasan.count({
+                where: {
+                    id_user_kasubag: req.user.id_user,
+                    status: { [Op.ne]: 'selesai' }
+                }
+            });
+
+            const completedAssignmentsCount = await Penugasan.count({
+                where: {
+                    id_user_kasubag: req.user.id_user,
+                    status: 'selesai'
+                }
+            });
+
+            const onProgressAssignmentsCount = await Penugasan.count({
+                where: {
+                    id_user_kasubag: req.user.id_user,
+                    status: 'progress'
+                }
+            });
+
+            // 2. Today's Agendas
+            const todayAgendas = await Agenda.findAll({
+                where: { 
+                    tanggal_kegiatan: today,
+                    id_agenda: {
+                        [Op.in]: sequelize.literal(`(
+                            SELECT sa1.id_agenda
+                            FROM "StatusAgenda" sa1
+                            WHERE sa1.id_status_agenda = (
+                                SELECT sa2.id_status_agenda
+                                FROM "StatusAgenda" sa2
+                                WHERE sa2.id_agenda = sa1.id_agenda
+                                ORDER BY sa2."createdAt" DESC
+                                LIMIT 1
+                            )
+                            AND sa1.status_agenda IN ('approved_sespri', 'approved_ajudan', 'delegated', 'completed')
+                        )`)
+                    }
+                },
+                include: [
+                    {
+                        model: StatusAgenda,
+                        as: 'statusAgendas',
+                        required: true,
+                        limit: 1,
+                        order: [['createdAt', 'DESC']]
+                    },
+                    {
+                        model: AgendaPimpinan,
+                        as: 'agendaPimpinans',
+                        include: [{
+                            model: PeriodeJabatan,
+                            as: 'periodeJabatan',
+                            include: [
+                                { model: JabatanPimpinan, as: 'jabatan' },
+                                { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                            ]
+                        }]
+                    },
+                    {
+                        model: SlotAgendaPimpinan,
+                        as: 'slotAgendaPimpinans',
+                        required: false,
+                        include: [
+                            { model: SlotWaktu, as: 'slotWaktu' },
+                            {
+                                model: PeriodeJabatan,
+                                as: 'periodeJabatanDiusulkan',
+                                include: [
+                                    { model: JabatanPimpinan, as: 'jabatan' },
+                                    { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                                ]
+                            },
+                            {
+                                model: PeriodeJabatan,
+                                as: 'periodeJabatanHadir',
+                                include: [
+                                    { model: JabatanPimpinan, as: 'jabatan' },
+                                    { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        model: Penugasan,
+                        as: 'penugasans',
+                        include: [{
+                            model: LaporanKegiatan,
+                            as: 'laporanKegiatans',
+                            attributes: ['id_laporan', 'deskripsi_laporan', 'catatan_laporan', 'dokumentasi_laporan', 'createdAt']
+                        }]
+                    }
+                ]
+            });
+
+            // 3. Beban Kerja Staf (Bulan Ini)
+            const allAssignmentsThisMonth = await Penugasan.findAll({
+                where: {
+                    tanggal_penugasan: {
+                        [Op.gte]: new Date(currentYear, currentMonth, 1),
+                        [Op.lt]: new Date(currentYear, currentMonth + 1, 1)
+                    },
+                    jenis_penugasan: 'protokol'
+                },
+                include: [{
+                    model: SlotAgendaStaff,
+                    as: 'slotAgendaStaffs',
+                    attributes: ['id_user_staff']
+                }]
+            });
+
+            const workload = staffList.map(staf => {
+                const tasks = allAssignmentsThisMonth.filter(p => 
+                    p.slotAgendaStaffs.some(s => s.id_user_staff === staf.id_user)
+                );
+                const count = tasks.length;
+                return {
+                    nama: staf.nama,
+                    tugas: count,
+                    persentase: Math.min(Math.round((count / 10) * 100), 100)
+                };
+            }).sort((a, b) => b.tugas - a.tugas);
+
+            // 4. Perlu Penugasan
+            const agendasForAssign = await Agenda.findAll({
+                where: {
+                    tanggal_kegiatan: { [Op.gte]: today },
+                    id_agenda: {
+                        [Op.in]: sequelize.literal(`(
+                            SELECT sa1.id_agenda
+                            FROM "StatusAgenda" sa1
+                            WHERE sa1.id_status_agenda = (
+                                SELECT sa2.id_status_agenda
+                                FROM "StatusAgenda" sa2
+                                WHERE sa2.id_agenda = sa1.id_agenda
+                                ORDER BY sa2."createdAt" DESC
+                                LIMIT 1
+                            )
+                            AND sa1.status_agenda IN ('approved_ajudan', 'delegated', 'completed')
+                            AND sa1.id_agenda NOT IN (SELECT id_agenda FROM "Penugasans" WHERE jenis_penugasan = 'protokol')
+                        )`)
+                    }
+                },
+                limit: 5,
+                order: [['tanggal_kegiatan', 'ASC'], ['waktu_mulai', 'ASC']]
+            });
+
+            const dashboardData = {
+                stats: {
+                    totalStaff,
+                    activeAssignments: activeAssignmentsCount,
+                    completedAssignments: completedAssignmentsCount,
+                    onProgressAssignments: onProgressAssignmentsCount
+                },
+                todayAgendas,
+                workload,
+                perluPenugasan: agendasForAssign.map(a => ({
+                    id: a.id_agenda,
+                    kegiatan: a.nama_kegiatan,
+                    waktu: `${a.waktu_mulai.slice(0, 5)} - ${a.waktu_selesai.slice(0, 5)}`,
+                    tanggal: a.tanggal_kegiatan,
+                    perihal: a.perihal
+                }))
+            };
+
+            return this.sendResponse(res, 200, true, 'Data dashboard kasubag protokol berhasil diambil', dashboardData);
+        } catch (error) {
+            return this.sendError(res, error, 'Gagal mengambil data dashboard kasubag protokol');
+        }
+    }
+
+    async getStafMediaStats(req, res) {
+        try {
+            const { id_user } = req.user;
+            const today = new Date().toISOString().split('T')[0];
+
+            // 1. Stats from DraftBerita
+            const pendingReview = await DraftBerita.count({ where: { id_user_staff: id_user, status: 'draft' } });
+            const approved = await DraftBerita.count({ where: { id_user_staff: id_user, status: 'published' } });
+            const revisionNeeded = await DraftBerita.count({ where: { id_user_staff: id_user, status: 'revision' } });
+            
+            // 1.1 Total assignments for this staff
+            const assignedPenugasansCount = await SlotAgendaStaff.count({
+                where: { id_user_staff: id_user },
+                distinct: true,
+                col: 'id_penugasan'
+            });
+
+            // 2. Today's Agendas
+            const todayAgendas = await Agenda.findAll({
+                where: { 
+                    tanggal_kegiatan: today,
+                    id_agenda: {
+                        [Op.in]: sequelize.literal(`(
+                            SELECT sa1.id_agenda
+                            FROM "StatusAgenda" sa1
+                            WHERE sa1.id_status_agenda = (
+                                SELECT sa2.id_status_agenda
+                                FROM "StatusAgenda" sa2
+                                WHERE sa2.id_agenda = sa1.id_agenda
+                                ORDER BY sa2."createdAt" DESC
+                                LIMIT 1
+                            )
+                            AND sa1.status_agenda IN ('approved_ajudan', 'delegated', 'completed')
+                        )`)
+                    }
+                },
+                include: [
+                    {
+                        model: StatusAgenda,
+                        as: 'statusAgendas',
+                        required: true,
+                        limit: 1,
+                        order: [['createdAt', 'DESC']]
+                    },
+                    {
+                        model: AgendaPimpinan,
+                        as: 'agendaPimpinans',
+                        include: [{
+                            model: PeriodeJabatan,
+                            as: 'periodeJabatan',
+                            include: [
+                                { model: JabatanPimpinan, as: 'jabatan' },
+                                { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                            ]
+                        }]
+                    }
+                ]
+            });
+
+            // 3. My Assignments (Today)
+            const myAssignments = await Penugasan.findAll({
+                where: {
+                    jenis_penugasan: 'media',
+                    id_penugasan: {
+                        [Op.in]: sequelize.literal(`(
+                            SELECT id_penugasan 
+                            FROM "SlotAgendaStaffs" 
+                            WHERE id_user_staff = '${id_user}' 
+                            AND tanggal = '${today}'
+                        )`)
+                    }
+                },
+                include: [
+                    {
+                        model: Agenda,
+                        as: 'agenda',
+                        attributes: ['id_agenda', 'nama_kegiatan', 'tanggal_kegiatan', 'waktu_mulai', 'waktu_selesai', 'lokasi_kegiatan'],
+                        include: [
+                            {
+                                model: AgendaPimpinan,
+                                as: 'agendaPimpinans',
+                                include: [
+                                    {
+                                        model: PeriodeJabatan,
+                                        as: 'periodeJabatan',
+                                        include: [
+                                            { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            });
+
+            // 4. Recent Drafts
+            const recentDrafts = await DraftBerita.findAll({
+                where: { id_user_staff: id_user },
+                limit: 5,
+                order: [['createdAt', 'DESC']],
+                include: [
+                    {
+                        model: Penugasan,
+                        as: 'penugasan',
+                        include: [{
+                            model: Agenda,
+                            as: 'agenda',
+                            attributes: ['nama_kegiatan']
+                        }]
+                    }
+                ]
+            });
+
+            const dashboardData = {
+                stats: {
+                    totalTasks: assignedPenugasansCount,
+                    pendingReview,
+                    approved,
+                    revisionNeeded
+                },
+                todayAgendas,
+                myAssignments: myAssignments.map(p => ({
+                    id: p.id_penugasan,
+                    judul_kegiatan: p.agenda?.nama_kegiatan || '-',
+                    pimpinan: p.agenda?.agendaPimpinans?.map(ap => ap.periodeJabatan?.pimpinan?.nama_pimpinan).join(', ') || '-',
+                    waktu: `${p.agenda?.waktu_mulai.slice(0, 5)} - ${p.agenda?.waktu_selesai.slice(0, 5)}`,
+                    tempat: p.agenda?.lokasi_kegiatan || '-',
+                    status_draft: 'Check detail' // Logic for draft status per assignment can be complex, will simplify for now
+                })),
+                recentDrafts: recentDrafts.map(d => ({
+                    id: d.id_draft_berita,
+                    judul_draft: d.judul_berita,
+                    judul_kegiatan: d.penugasan?.agenda?.nama_kegiatan || '-',
+                    tanggal_upload: d.createdAt,
+                    status: d.status,
+                    feedback: d.catatan_perbaikan
+                }))
+            };
+
+            return this.sendResponse(res, 200, true, 'Data dashboard staf media berhasil diambil', dashboardData);
+        } catch (error) {
+            return this.sendError(res, error, 'Gagal mengambil data dashboard staf media');
+        }
+    }
+
+    async getStafProtokolStats(req, res) {
+        try {
+            const { id_user } = req.user;
+            const today = new Date().toISOString().split('T')[0];
+
+            // 1. Stats from Penugasan (via SlotAgendaStaff)
+            const assignedPenugasanIds = await SlotAgendaStaff.findAll({
+                where: { id_user_staff: id_user },
+                attributes: [[sequelize.fn('DISTINCT', sequelize.col('id_penugasan')), 'id_penugasan']],
+                raw: true
+            });
+            const penugasanIds = assignedPenugasanIds.map(p => p.id_penugasan).filter(id => id);
+
+            const totalTasks = penugasanIds.length;
+            const onProgress = await Penugasan.count({
+                where: {
+                    id_penugasan: { [Op.in]: penugasanIds },
+                    status: 'progress'
+                }
+            });
+            const completed = await Penugasan.count({
+                where: {
+                    id_penugasan: { [Op.in]: penugasanIds },
+                    status: 'selesai'
+                }
+            });
+            const pending = await Penugasan.count({
+                where: {
+                    id_penugasan: { [Op.in]: penugasanIds },
+                    status: 'pending'
+                }
+            });
+
+            // 2. Today's Agendas
+            const todayAgendas = await Agenda.findAll({
+                where: { 
+                    tanggal_kegiatan: today,
+                    id_agenda: {
+                        [Op.in]: sequelize.literal(`(
+                            SELECT sa1.id_agenda
+                            FROM "StatusAgenda" sa1
+                            WHERE sa1.id_status_agenda = (
+                                SELECT sa2.id_status_agenda
+                                FROM "StatusAgenda" sa2
+                                WHERE sa2.id_agenda = sa1.id_agenda
+                                ORDER BY sa2."createdAt" DESC
+                                LIMIT 1
+                            )
+                            AND sa1.status_agenda IN ('approved_ajudan', 'delegated', 'completed')
+                        )`)
+                    }
+                },
+                include: [
+                    {
+                        model: StatusAgenda,
+                        as: 'statusAgendas',
+                        required: true,
+                        limit: 1,
+                        order: [['createdAt', 'DESC']]
+                    },
+                    {
+                        model: AgendaPimpinan,
+                        as: 'agendaPimpinans',
+                        include: [{
+                            model: PeriodeJabatan,
+                            as: 'periodeJabatan',
+                            include: [
+                                { model: JabatanPimpinan, as: 'jabatan' },
+                                { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                            ]
+                        }]
+                    },
+                    {
+                        model: Penugasan,
+                        as: 'penugasans',
+                        include: [{
+                            model: LaporanKegiatan,
+                            as: 'laporanKegiatans'
+                        }]
+                    }
+                ]
+            });
+
+            // 3. My Tasks (Today or Active)
+            const myTasks = await Penugasan.findAll({
+                where: {
+                    id_penugasan: { [Op.in]: penugasanIds },
+                    status: { [Op.not]: 'selesai' }
+                },
+                include: [
+                    {
+                        model: Agenda,
+                        as: 'agenda',
+                        attributes: ['id_agenda', 'nama_kegiatan', 'tanggal_kegiatan', 'waktu_mulai', 'waktu_selesai', 'lokasi_kegiatan'],
+                        include: [
+                            {
+                                model: AgendaPimpinan,
+                                as: 'agendaPimpinans',
+                                include: [
+                                    {
+                                        model: PeriodeJabatan,
+                                        as: 'periodeJabatan',
+                                        include: [
+                                            { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        model: User,
+                        as: 'kasubag',
+                        attributes: ['nama']
+                    }
+                ],
+                order: [['createdAt', 'DESC']],
+                limit: 5
+            });
+
+            const dashboardData = {
+                stats: {
+                    totalTasks,
+                    onProgress,
+                    completed,
+                    pending
+                },
+                todayAgendas,
+                myTasks: myTasks.map(p => ({
+                    id: p.id_penugasan,
+                    judul: p.agenda?.nama_kegiatan || '-',
+                    penugasan_dari: p.kasubag?.nama || 'Kasubag',
+                    tanggal: p.agenda?.tanggal_kegiatan,
+                    waktu: `${p.agenda?.waktu_mulai?.slice(0, 5)} - ${p.agenda?.waktu_selesai?.slice(0, 5)}`,
+                    lokasi: p.agenda?.lokasi_kegiatan || '-',
+                    status: p.status === 'pending' ? 'Belum Dimulai' : p.status === 'progress' ? 'Berlangsung' : 'Selesai',
+                    instruksi: p.deskripsi_penugasan || '-',
+                    jumlah_progress: 0 // Will need LaporanKegiatan count if needed
+                }))
+            };
+
+            return this.sendResponse(res, 200, true, 'Data dashboard staf protokol berhasil diambil', dashboardData);
+        } catch (error) {
+            return this.sendError(res, error, 'Gagal mengambil data dashboard staf protokol');
         }
     }
 }

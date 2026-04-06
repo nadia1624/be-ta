@@ -252,7 +252,7 @@ class BeritaController extends BaseController {
                     { 
                         model: Penugasan, 
                         as: 'penugasan',
-                        include: [{ model: Agenda, as: 'agenda', attributes: ['nama_kegiatan', 'tanggal_kegiatan'] }]
+                        include: [{ model: Agenda, as: 'agenda', attributes: ['nama_kegiatan', 'tanggal_kegiatan', 'lokasi_kegiatan'] }]
                     },
                     { model: DokumentasiBerita, as: 'dokumentasis', attributes: ['id_dokumentasi', 'file_path'] },
                     { model: RevisiDraftBerita, as: 'revisies' }
@@ -276,7 +276,7 @@ class BeritaController extends BaseController {
                     { 
                         model: Penugasan, 
                         as: 'penugasan',
-                        include: [{ model: Agenda, as: 'agenda', attributes: ['nama_kegiatan', 'tanggal_kegiatan'] }]
+                        include: [{ model: Agenda, as: 'agenda', attributes: ['nama_kegiatan', 'tanggal_kegiatan', 'lokasi_kegiatan'] }]
                     },
                     { model: DokumentasiBerita, as: 'dokumentasis', attributes: ['id_dokumentasi', 'file_path'] },
                     { model: RevisiDraftBerita, as: 'revisies' }
@@ -300,7 +300,7 @@ class BeritaController extends BaseController {
                     { 
                         model: Penugasan, 
                         as: 'penugasan',
-                        include: [{ model: Agenda, as: 'agenda', attributes: ['nama_kegiatan', 'tanggal_kegiatan'] }]
+                        include: [{ model: Agenda, as: 'agenda', attributes: ['nama_kegiatan', 'tanggal_kegiatan', 'lokasi_kegiatan'] }]
                     },
                     { model: DokumentasiBerita, as: 'dokumentasis', attributes: ['id_dokumentasi', 'file_path'] },
                     { model: RevisiDraftBerita, as: 'revisies' }

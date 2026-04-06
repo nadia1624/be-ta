@@ -1,5 +1,5 @@
 const BaseController = require('./BaseController');
-const { Agenda, StatusAgenda, AgendaPimpinan, SlotAgendaPimpinan, PeriodeJabatan, JabatanPimpinan, Pimpinan, SlotWaktu, User, PimpinanAjudan, sequelize } = require('../models');
+const { Agenda, StatusAgenda, AgendaPimpinan, SlotAgendaPimpinan, PeriodeJabatan, JabatanPimpinan, Pimpinan, SlotWaktu, User, PimpinanAjudan, Penugasan, LaporanKegiatan, sequelize } = require('../models');
 const { Op } = require('sequelize');
 
 class AgendaController extends BaseController {
@@ -448,8 +448,25 @@ class AgendaController extends BaseController {
                                     { model: JabatanPimpinan, as: 'jabatan' },
                                     { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
                                 ]
+                            },
+                            {
+                                model: PeriodeJabatan,
+                                as: 'periodeJabatanHadir',
+                                include: [
+                                    { model: JabatanPimpinan, as: 'jabatan' },
+                                    { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                                ]
                             }
                         ]
+                    },
+                    {
+                        model: Penugasan,
+                        as: 'penugasans',
+                        include: [{
+                            model: LaporanKegiatan,
+                            as: 'laporanKegiatans',
+                            attributes: ['id_laporan', 'deskripsi_laporan', 'catatan_laporan', 'dokumentasi_laporan', 'createdAt']
+                        }]
                     }
                 ],
                 order: [['tanggal_kegiatan', 'ASC'], ['waktu_mulai', 'ASC']]
