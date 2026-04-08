@@ -1,5 +1,6 @@
 const BaseController = require('./BaseController');
-const { User, Role, PimpinanAjudan, PeriodeJabatan, Pimpinan, Periode } = require('../models');
+const { User, Role, PimpinanAjudan, PeriodeJabatan, Pimpinan, Periode, Sequelize } = require('../models');
+const { Op } = Sequelize;
 const bcrypt = require('bcryptjs');
 
 class UserController extends BaseController {
@@ -32,6 +33,10 @@ class UserController extends BaseController {
                             {
                                 model: PeriodeJabatan,
                                 as: 'periodeJabatan',
+                                on: {
+                                    id_jabatan: { [Op.col]: 'pimpinanAjudans.id_jabatan' },
+                                    id_periode: { [Op.col]: 'pimpinanAjudans.id_periode' }
+                                },
                                 include: [
                                     { model: Pimpinan, as: 'pimpinan' },
                                     { model: Periode, as: 'periode' }

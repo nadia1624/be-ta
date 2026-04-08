@@ -90,6 +90,10 @@ class PenugasanController extends BaseController {
                             {
                                 model: PeriodeJabatan,
                                 as: 'periodeJabatan',
+                                on: {
+                                    id_jabatan: { [Op.col]: 'agendaPimpinans.id_jabatan' },
+                                    id_periode: { [Op.col]: 'agendaPimpinans.id_periode' }
+                                },
                                 include: [
                                     { model: Pimpinan, as: 'pimpinan' }
                                 ]
@@ -139,6 +143,10 @@ class PenugasanController extends BaseController {
                             {
                                 model: PeriodeJabatan,
                                 as: 'periodeJabatan',
+                                on: {
+                                    id_jabatan: { [Op.col]: 'agendaPimpinans.id_jabatan' },
+                                    id_periode: { [Op.col]: 'agendaPimpinans.id_periode' }
+                                },
                                 include: [
                                     { model: Pimpinan, as: 'pimpinan' }
                                 ]
@@ -290,6 +298,10 @@ class PenugasanController extends BaseController {
                                     {
                                         model: PeriodeJabatan,
                                         as: 'periodeJabatan',
+                                        on: {
+                                            id_jabatan: { [Op.col]: 'agenda->agendaPimpinans.id_jabatan' },
+                                            id_periode: { [Op.col]: 'agenda->agendaPimpinans.id_periode' }
+                                        },
                                         include: [
                                             { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] },
                                             { model: JabatanPimpinan, as: 'jabatan', attributes: ['nama_jabatan'] }
@@ -396,6 +408,10 @@ class PenugasanController extends BaseController {
                                     {
                                         model: PeriodeJabatan,
                                         as: 'periodeJabatan',
+                                        on: {
+                                            id_jabatan: { [Op.col]: 'agenda->agendaPimpinans.id_jabatan' },
+                                            id_periode: { [Op.col]: 'agenda->agendaPimpinans.id_periode' }
+                                        },
                                         include: [
                                             { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] },
                                             { model: JabatanPimpinan, as: 'jabatan', attributes: ['nama_jabatan'] }
@@ -543,6 +559,10 @@ class PenugasanController extends BaseController {
                                     {
                                         model: PeriodeJabatan,
                                         as: 'periodeJabatan',
+                                        on: {
+                                            id_jabatan: { [Op.col]: 'agenda->agendaPimpinans.id_jabatan' },
+                                            id_periode: { [Op.col]: 'agenda->agendaPimpinans.id_periode' }
+                                        },
                                         include: [
                                             { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] },
                                             { model: JabatanPimpinan, as: 'jabatan', attributes: ['nama_jabatan'] }
