@@ -8,6 +8,7 @@ router.get('/active-assignments', authenticateToken, authorizeRoles('Admin', 'Pe
 router.get('/list', authenticateToken, authorizeRoles('Admin'), pimpinanController.getAllPimpinanData);
 router.get('/', authenticateToken, authorizeRoles('Admin', 'Sespri', 'Ajudan'), pimpinanController.getAllPimpinan);
 router.post('/', authenticateToken, authorizeRoles('Admin'), pimpinanController.createOrUpdatePimpinan);
-router.post('/delete', authenticateToken, authorizeRoles('Admin'), pimpinanController.deletePimpinan); // Using POST for delete with body, or could use DELETE with query params
+router.post('/delete', authenticateToken, authorizeRoles('Admin'), pimpinanController.deletePimpinan);
+router.post('/resend-sync/:id_pimpinan', authenticateToken, authorizeRoles('Admin'), pimpinanController.resendSyncInvitation);
 
 module.exports = router;

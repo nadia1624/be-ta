@@ -1,5 +1,7 @@
 const BaseController = require('./BaseController');
 const { Pimpinan, PeriodeJabatan, PimpinanAjudan, JabatanPimpinan, Periode } = require('../models');
+const emailHelper = require('../helpers/emailHelper');
+const googleCalendarHelper = require('../helpers/googleCalendarHelper');
 
 class PimpinanController extends BaseController {
     /**
@@ -79,7 +81,18 @@ class PimpinanController extends BaseController {
                 });
             }
 
-            return this.sendResponse(res, 200, true, 'Data pimpinan berhasil disimpan', pimpinan);
+            // 3. Send Google Calendar Sync Invitation if email is provided
+            if (email) {
+                try {
+                    const authUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/api/google-auth/initiate/${pimpinan.id_pimpinan}`;
+                    await emailHelper.sendSyncInvitation(pimpinan, authUrl);
+                } catch (emailError) {
+                    console.error('Failed to send sync invitation:', emailError);
+                    // Don't fail the whole request just because email failed
+                }
+            }
+
+            return this.sendResponse(res, 200, true, 'Data pimpinan berhasil disimpan dan undangan sinkronisasi telah dikirim', pimpinan);
         } catch (error) {
             return this.sendError(res, error, 'Error saving pimpinan');
         }
@@ -150,6 +163,24 @@ class PimpinanController extends BaseController {
             return this.sendResponse(res, 200, true, 'Data active assignments berhasil diambil', data);
         } catch (error) {
             return this.sendError(res, error, 'Error fetching active assignments');
+        }
+    }
+
+    async resendSyncInvitation(req, res) {
+        try {
+            const { id_pimpinan } = req.params;
+            const pimpinan = await Pimpinan.findByPk(id_pimpinan);
+            
+            if (!pimpinan || !pimpinan.email) {
+                return this.sendResponse(res, 404, false, 'Pimpinan tidak ditemukan atau tidak memiliki email');
+            }
+
+            const authUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/api/google-auth/initiate/${pimpinan.id_pimpinan}`;
+            await emailHelper.sendSyncInvitation(pimpinan, authUrl);
+            
+            return this.sendResponse(res, 200, true, 'Undangan sinkronisasi berhasil dikirim ulang');
+        } catch (error) {
+            return this.sendError(res, error, 'Gagal mengirim ulang undangan');
         }
     }
 }

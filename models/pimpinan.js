@@ -32,6 +32,22 @@ module.exports = (sequelize, DataTypes) => {
     no_hp: {
       type: DataTypes.STRING(20),
       allowNull: true
+    },
+    google_access_token: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    google_refresh_token: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    google_token_expiry: {
+      type: DataTypes.BIGINT,
+      allowNull: true
+    },
+    is_calendar_synced: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
     }
   }, {
     sequelize,

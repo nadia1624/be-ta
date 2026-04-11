@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const BaseController = require('./BaseController');
 const { Penugasan, SlotAgendaStaff, SlotAgendaPimpinan, AgendaPimpinan, User, Role, Agenda, StatusAgenda, SlotWaktu, PeriodeJabatan, Pimpinan, Periode, JabatanPimpinan, LaporanKegiatan, DraftBerita, DokumentasiBerita, RevisiDraftBerita, sequelize } = require('../models');
+const { sendPushNotification } = require('../helpers/pushNotificationHelper');
 
 class PenugasanController extends BaseController {
     /**
@@ -252,6 +253,23 @@ class PenugasanController extends BaseController {
             }
 
             await transaction.commit();
+
+            // Notify each assigned staff member
+            for (const id_user_staff of staff_ids) {
+                const targetUrl = jenis_penugasan === 'media' 
+                    ? `/staff-media/tugas-saya` 
+                    : `/staff-protokol/tugas-saya`;
+
+                await sendPushNotification(id_user_staff, {
+                    title: 'Penugasan Baru',
+                    body: `Anda telah diberikan penugasan baru oleh Kasubag untuk agenda: "${agenda.nama_kegiatan}". Silakan periksa detail tugas Anda.`,
+                    data: {
+                        url: targetUrl,
+                        id_penugasan: penugasan.id_penugasan
+                    }
+                });
+            }
+
             return this.sendResponse(res, 201, true, 'Penugasan berhasil dibuat', penugasan);
         } catch (error) {
             await transaction.rollback();

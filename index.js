@@ -23,6 +23,7 @@ const periodeRoutes = require('./routes/periodeRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/periode', periodeRoutes);
+app.use('/api/kaskpd', require('./routes/kaskpdRoutes'));
 app.use('/api/pimpinan', require('./routes/pimpinanRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/agenda', require('./routes/agendaRoutes'));
@@ -30,11 +31,16 @@ app.use('/api/berita', require('./routes/beritaRoutes'));
 app.use('/api/penugasan', require('./routes/penugasanRoutes'));
 app.use('/api/laporan-kegiatan', require('./routes/laporanKegiatanRoutes'));
 app.use('/api/dashboards', require('./routes/dashboardRoutes'));
+app.use('/api/google-auth', require('./routes/googleAuthRoutes'));
+app.use('/api/notifications', require('./routes/notificationRoutes'));
 
 // Health check
 app.get('/', (req, res) => {
   res.json({ success: true, message: 'Sistem Agenda Pimpinan API is running' });
 });
+
+const { initReminders } = require('./helpers/reminderScheduler');
+initReminders();
 
 // Start server
 app.listen(port, () => {

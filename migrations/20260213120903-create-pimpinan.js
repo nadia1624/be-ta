@@ -25,6 +25,22 @@ module.exports = {
         type: Sequelize.STRING(20),
         allowNull: true
       },
+      google_access_token: {
+        type: Sequelize.TEXT,
+        allowNull: true
+      },
+      google_refresh_token: {
+        type: Sequelize.TEXT,
+        allowNull: true
+      },
+      google_token_expiry: {
+        type: Sequelize.BIGINT,
+        allowNull: true
+      },
+      is_calendar_synced: {
+        type: Sequelize.BOOLEAN,
+        defaultValue: false
+      },
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE,

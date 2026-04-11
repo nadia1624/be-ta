@@ -58,6 +58,10 @@ module.exports = (sequelize, DataTypes) => {
     surat_disposisi: {
       type: DataTypes.STRING,
       allowNull: true
+    },
+    google_event_id: {
+      type: DataTypes.STRING,
+      allowNull: true
     }
   }, {
     sequelize,

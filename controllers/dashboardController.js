@@ -58,6 +58,7 @@ class DashboardController extends BaseController {
                         model: StatusAgenda,
                         as: 'statusAgendas',
                         required: false,
+                        separate: true,
                         limit: 1,
                         order: [['createdAt', 'DESC']]
                     }
@@ -66,7 +67,8 @@ class DashboardController extends BaseController {
 
             // 5. Upcoming Agendas (limit 5)
             // Filter agendas with confirmed status that happen today or in the future
-            const upcomingAgenda = await Agenda.findAll({
+            const upcomingAgendaIds = await Agenda.findAll({
+                attributes: ['id_agenda'],
                 where: {
                     tanggal_kegiatan: {
                         [Op.gte]: new Date().toISOString().split('T')[0]
@@ -87,12 +89,22 @@ class DashboardController extends BaseController {
                     }
                 },
                 limit: 5,
+                order: [['tanggal_kegiatan', 'ASC'], ['waktu_mulai', 'ASC']]
+            });
+
+            const upcomingAgenda = await Agenda.findAll({
+                where: {
+                    id_agenda: {
+                        [Op.in]: upcomingAgendaIds.map(a => a.id_agenda)
+                    }
+                },
                 order: [['tanggal_kegiatan', 'ASC'], ['waktu_mulai', 'ASC']],
                 include: [
                     {
                         model: StatusAgenda,
                         as: 'statusAgendas',
                         required: true,
+                        separate: true,
                         limit: 1,
                         order: [['createdAt', 'DESC']]
                     },
@@ -259,6 +271,7 @@ class DashboardController extends BaseController {
                         model: StatusAgenda,
                         as: 'statusAgendas',
                         required: true,
+                        separate: true,
                         limit: 1,
                         order: [['createdAt', 'DESC']]
                     },
@@ -305,6 +318,7 @@ class DashboardController extends BaseController {
                     {
                         model: Penugasan,
                         as: 'penugasans',
+                        separate: true,
                         include: [{
                             model: LaporanKegiatan,
                             as: 'laporanKegiatans',
@@ -439,6 +453,7 @@ class DashboardController extends BaseController {
                         model: StatusAgenda,
                         as: 'statusAgendas',
                         required: true,
+                        separate: true,
                         limit: 1,
                         order: [['createdAt', 'DESC']]
                     },
@@ -485,6 +500,7 @@ class DashboardController extends BaseController {
                     {
                         model: Penugasan,
                         as: 'penugasans',
+                        separate: true,
                         include: [{
                             model: LaporanKegiatan,
                             as: 'laporanKegiatans',
@@ -641,6 +657,7 @@ class DashboardController extends BaseController {
                         model: StatusAgenda,
                         as: 'statusAgendas',
                         required: true,
+                        separate: true,
                         limit: 1,
                         order: [['createdAt', 'DESC']]
                     },
@@ -687,6 +704,7 @@ class DashboardController extends BaseController {
                     {
                         model: Penugasan,
                         as: 'penugasans',
+                        separate: true,
                         include: [{
                             model: LaporanKegiatan,
                             as: 'laporanKegiatans',
@@ -778,9 +796,9 @@ class DashboardController extends BaseController {
             const today = new Date().toISOString().split('T')[0];
 
             // 1. Stats from DraftBerita
-            const pendingReview = await DraftBerita.count({ where: { id_user_staff: id_user, status: 'draft' } });
-            const approved = await DraftBerita.count({ where: { id_user_staff: id_user, status: 'published' } });
-            const revisionNeeded = await DraftBerita.count({ where: { id_user_staff: id_user, status: 'revision' } });
+            const pendingReview = await DraftBerita.count({ where: { id_user_staff: id_user, status_draft: 'draft' } });
+            const approvedCount = await DraftBerita.count({ where: { id_user_staff: id_user, status_draft: 'approved' } });
+            const revisionNeeded = await DraftBerita.count({ where: { id_user_staff: id_user, status_draft: 'review' } });
             
             // 1.1 Total assignments for this staff
             const assignedPenugasansCount = await SlotAgendaStaff.count({
@@ -813,6 +831,7 @@ class DashboardController extends BaseController {
                         model: StatusAgenda,
                         as: 'statusAgendas',
                         required: true,
+                        separate: true,
                         limit: 1,
                         order: [['createdAt', 'DESC']]
                     },
@@ -890,7 +909,7 @@ class DashboardController extends BaseController {
                 stats: {
                     totalTasks: assignedPenugasansCount,
                     pendingReview,
-                    approved,
+                    approved: approvedCount,
                     revisionNeeded
                 },
                 todayAgendas,
@@ -907,8 +926,8 @@ class DashboardController extends BaseController {
                     judul_draft: d.judul_berita,
                     judul_kegiatan: d.penugasan?.agenda?.nama_kegiatan || '-',
                     tanggal_upload: d.createdAt,
-                    status: d.status,
-                    feedback: d.catatan_perbaikan
+                    status: d.status_draft,
+                    feedback: d.catatan
                 }))
             };
 
@@ -975,6 +994,7 @@ class DashboardController extends BaseController {
                         model: StatusAgenda,
                         as: 'statusAgendas',
                         required: true,
+                        separate: true,
                         limit: 1,
                         order: [['createdAt', 'DESC']]
                     },
@@ -993,6 +1013,7 @@ class DashboardController extends BaseController {
                     {
                         model: Penugasan,
                         as: 'penugasans',
+                        separate: true,
                         include: [{
                             model: LaporanKegiatan,
                             as: 'laporanKegiatans'

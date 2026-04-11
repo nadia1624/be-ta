@@ -40,6 +40,10 @@ module.exports = {
         type: Sequelize.STRING,
         allowNull: true
       },
+      google_event_id: {
+        type: Sequelize.STRING(100),
+        allowNull: true
+      },
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE,

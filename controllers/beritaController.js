@@ -1,5 +1,6 @@
 const BaseController = require('./BaseController');
 const { DraftBerita, DokumentasiBerita, User, Penugasan, Agenda, AgendaPimpinan, PeriodeJabatan, Pimpinan, RevisiDraftBerita } = require('../models');
+const { sendPushNotification } = require('../helpers/pushNotificationHelper');
 
 class BeritaController extends BaseController {
     /**
@@ -384,6 +385,21 @@ class BeritaController extends BaseController {
                     tanggal_revisi: new Date()
                 });
             }
+
+            // Notify staff about the review outcome
+            const notificationPayload = {
+                title: status_draft === 'approved' ? 'Berita Disetujui' : 'Revisi Berita Diperlukan',
+                body: status_draft === 'approved' 
+                    ? `Draft berita "${draft.judul_berita}" telah disetujui.`
+                    : `Draft berita "${draft.judul_berita}" membutuhkan revisi: ${catatan || 'Cek detail revisi.'}`,
+                data: {
+                    url: '/staff-media/draft-berita',
+                    id_draft_berita: draft.id_draft_berita,
+                    status: status_draft
+                }
+            };
+
+            await sendPushNotification(draft.id_user_staff, notificationPayload);
 
             const message = status_draft === 'approved' ? 'Draft berita berhasil disetujui' : 'Draft berita berhasil dikirim kembali untuk revisi';
             return this.sendResponse(res, 200, true, message, draft);

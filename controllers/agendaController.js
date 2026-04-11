@@ -1,6 +1,8 @@
 const BaseController = require('./BaseController');
-const { Agenda, StatusAgenda, AgendaPimpinan, SlotAgendaPimpinan, PeriodeJabatan, JabatanPimpinan, Pimpinan, SlotWaktu, User, PimpinanAjudan, Penugasan, LaporanKegiatan, sequelize } = require('../models');
+const { Agenda, StatusAgenda, AgendaPimpinan, SlotAgendaPimpinan, PeriodeJabatan, JabatanPimpinan, Pimpinan, SlotWaktu, User, PimpinanAjudan, Penugasan, LaporanKegiatan, Role, KASKPDPendamping,KASKPD, sequelize } = require('../models');
 const { Op } = require('sequelize');
+const googleCalendarHelper = require('../helpers/googleCalendarHelper');
+const { sendPushNotification } = require('../helpers/pushNotificationHelper');
 
 class AgendaController extends BaseController {
     async generateAgendaId(transaction = null) {
@@ -113,6 +115,31 @@ class AgendaController extends BaseController {
             }
 
             await transaction.commit();
+
+            // Notify all Sespri users about the new agenda
+            if (!isSespri) {
+                const sespriUsers = await User.findAll({
+                    include: [{
+                        model: Role,
+                        as: 'role',
+                        where: { nama_role: 'Sespri' }
+                    }]
+                });
+
+                const notificationPayload = {
+                    title: 'Permohonan Agenda Baru',
+                    body: `Agenda "${newAgenda.nama_kegiatan}" telah diajukan oleh ${req.user.nama}.`,
+                    data: {
+                        url: '/sespri/agenda-pimpinan', // Adjust as needed
+                        id_agenda: newAgenda.id_agenda
+                    }
+                };
+
+                for (const user of sespriUsers) {
+                    await sendPushNotification(user.id_user, notificationPayload);
+                }
+            }
+
             return this.sendResponse(res, 201, true, 'Agenda berhasil diajukan', newAgenda);
         } catch (error) {
             await transaction.rollback();
@@ -170,6 +197,15 @@ class AgendaController extends BaseController {
                                 ]
                             }
                         ]
+                    },
+                    {
+                        model: KASKPDPendamping,
+                        as: 'kaskpdPendampings',
+                        include: [{
+                            model: KASKPD,
+                            as: 'kaskpd',
+                            attributes: ['id_ka_skpd', 'nama_instansi']
+                        }]
                     }
                 ],
                 order: [['createdAt', 'DESC']]
@@ -226,6 +262,15 @@ class AgendaController extends BaseController {
                                 ]
                             }
                         ]
+                    },
+                    {
+                        model: KASKPDPendamping,
+                        as: 'kaskpdPendampings',
+                        include: [{
+                            model: KASKPD,
+                            as: 'kaskpd',
+                            attributes: ['id_ka_skpd', 'nama_instansi']
+                        }]
                     }
                 ],
                 order: [['createdAt', 'DESC']]
@@ -273,6 +318,102 @@ class AgendaController extends BaseController {
             }, { transaction });
 
             await transaction.commit();
+
+            // Notify Pemohon about the status update
+            if (agenda.id_user_pemohon) {
+                const statusLabels = {
+                    'approved_sespri': 'Disetujui Sespri',
+                    'approved_ajudan': 'Disetujui Ajudan',
+                    'rejected_sespri': 'Ditolak Sespri',
+                    'rejected_ajudan': 'Ditolak Ajudan',
+                    'revision': 'Butuh Revisi',
+                    'delegated': 'Delegasikan',
+                    'canceled': 'Dibatalkan',
+                    'completed': 'Selesai'
+                };
+
+                const currentStatusLabel = statusLabels[status] || status;
+
+                await sendPushNotification(agenda.id_user_pemohon, {
+                    title: 'Update Status Agenda',
+                    body: `Agenda "${agenda.nama_kegiatan}" Anda sekarang berstatus: ${currentStatusLabel}.`,
+                    data: {
+                        url: '/pemohon/agenda',
+                        id_agenda: agenda.id_agenda,
+                        status: status
+                    }
+                });
+            }
+
+            // 4. Handle Google Calendar Deletion if agenda is canceled or rejected
+            if (['rejected_sespri', 'rejected_ajudan', 'canceled'].includes(status)) {
+                try {
+                    const agendaPimpinans = await AgendaPimpinan.findAll({
+                        where: { id_agenda, google_event_id: { [Op.ne]: null } },
+                        include: [
+                            { 
+                                model: PeriodeJabatan, 
+                                as: 'periodeJabatan', 
+                                include: [{ model: Pimpinan, as: 'pimpinan' }] 
+                            }
+                        ]
+                    });
+
+                    for (const ap of agendaPimpinans) {
+                        const pimpinan = ap.periodeJabatan?.pimpinan;
+                        if (pimpinan && pimpinan.is_calendar_synced) {
+                            await googleCalendarHelper.deleteEvent(pimpinan, ap.google_event_id);
+                            await ap.update({ google_event_id: null });
+                        }
+                    }
+                } catch (syncError) {
+                    console.error('Agenda Cancellation Sync Failed:', syncError);
+                }
+            }
+
+            // 5. Notify Ajudan if status is approved_sespri
+            if (status === 'approved_sespri') {
+                try {
+                    // Find all Pimpinan associated with this agenda
+                    const agendaPimpinans = await AgendaPimpinan.findAll({
+                        where: { id_agenda }
+                    });
+
+                    if (agendaPimpinans.length > 0) {
+                        // Find all Ajudans assigned to these Pimpinans
+                        const pimpinanCriteria = agendaPimpinans.map(ap => ({
+                            id_jabatan: ap.id_jabatan,
+                            id_periode: ap.id_periode
+                        }));
+
+                        const pimpinanAjudans = await PimpinanAjudan.findAll({
+                            where: {
+                                [Op.or]: pimpinanCriteria
+                            }
+                        });
+
+                        // Send notifications to each unique Ajudan
+                        const uniqueAjudanIds = [...new Set(pimpinanAjudans.map(pa => pa.id_user_ajudan))];
+                        
+                        const ajudanNotificationPayload = {
+                            title: 'Permohonan Agenda Baru (Perlu Verifikasi)',
+                            body: `Agenda "${agenda.nama_kegiatan}" telah disetujui Sespri dan memerlukan verifikasi Anda.`,
+                            data: {
+                                url: '/ajudan/konfirmasi-agenda',
+                                id_agenda: agenda.id_agenda,
+                                status: 'approved_sespri'
+                            }
+                        };
+
+                        for (const id_user_ajudan of uniqueAjudanIds) {
+                            await sendPushNotification(id_user_ajudan, ajudanNotificationPayload);
+                        }
+                    }
+                } catch (notifError) {
+                    console.error('Error sending notifications to Ajudan:', notifError);
+                }
+            }
+
             return this.sendResponse(res, 201, true, `Agenda berhasil diverifikasi dengan status: ${status}`, newStatus);
         } catch (error) {
             await transaction.rollback();
@@ -315,7 +456,8 @@ class AgendaController extends BaseController {
             const {
                 nomor_surat, tanggal_surat, perihal,
                 nama_kegiatan, lokasi_kegiatan, contact_person, keterangan,
-                tanggal_kegiatan, waktu_mulai, waktu_selesai
+                tanggal_kegiatan, waktu_mulai, waktu_selesai,
+                kaskpd_pendamping
             } = req.body;
 
             const surat_permohonan = req.file ? req.file.path : undefined;
@@ -334,6 +476,61 @@ class AgendaController extends BaseController {
             if (surat_permohonan) updateData.surat_permohonan = surat_permohonan;
 
             await agenda.update(updateData, { transaction });
+
+            // Handle KASKPD Pendamping if Sespri
+            if (req.user.nama_role === 'Sespri' && kaskpd_pendamping !== undefined) {
+                let pendampingIds = kaskpd_pendamping;
+                if (typeof kaskpd_pendamping === 'string') {
+                    try {
+                        pendampingIds = JSON.parse(kaskpd_pendamping);
+                    } catch (e) {
+                        pendampingIds = [kaskpd_pendamping];
+                    }
+                }
+
+                if (Array.isArray(pendampingIds)) {
+                    // Clear existing
+                    await KASKPDPendamping.destroy({
+                        where: { id_agenda },
+                        transaction
+                    });
+
+                    // Create new
+                    if (pendampingIds.length > 0) {
+                        const pendampingPromises = pendampingIds.map(id_ka_skpd => 
+                            KASKPDPendamping.create({
+                                id_agenda,
+                                id_ka_skpd
+                            }, { transaction })
+                        );
+                        await Promise.all(pendampingPromises);
+                    }
+                }
+            }
+
+            // 4. Background Sync for all confirmed Pimpinans
+            try {
+                const confirmedAP = await AgendaPimpinan.findAll({
+                    where: { id_agenda: agenda.id_agenda, google_event_id: { [Op.ne]: null } },
+                    include: [
+                        { 
+                            model: PeriodeJabatan, 
+                            as: 'periodeJabatan', 
+                            include: [{ model: Pimpinan, as: 'pimpinan' }] 
+                        }
+                    ]
+                });
+
+                for (const ap of confirmedAP) {
+                    const pimpinan = ap.periodeJabatan?.pimpinan;
+                    if (pimpinan && pimpinan.is_calendar_synced) {
+                        // Resync with updated agenda data
+                        await googleCalendarHelper.syncEvent(pimpinan, agenda, ap.google_event_id);
+                    }
+                }
+            } catch (syncError) {
+                console.error('Agenda Update Sync Failed:', syncError);
+            }
 
             // Create new status record: back to pending after revision edit
             // Only role pemohon triggers this
@@ -486,6 +683,15 @@ class AgendaController extends BaseController {
                             model: LaporanKegiatan,
                             as: 'laporanKegiatans',
                             attributes: ['id_laporan', 'deskripsi_laporan', 'catatan_laporan', 'dokumentasi_laporan', 'createdAt']
+                        }]
+                    },
+                    {
+                        model: KASKPDPendamping,
+                        as: 'kaskpdPendampings',
+                        include: [{
+                            model: KASKPD,
+                            as: 'kaskpd',
+                            attributes: ['id_ka_skpd', 'nama_instansi']
                         }]
                     }
                 ],
@@ -711,6 +917,74 @@ class AgendaController extends BaseController {
             }
 
             await transaction.commit();
+
+            // 4. Notify Kasubag and Sespri (Post-Commit)
+            if (status_kehadiran === 'hadir' || status_kehadiran === 'diwakilkan') {
+                try {
+                    const { Role } = require('../models');
+                    const recipients = await User.findAll({
+                        include: [{
+                            model: Role,
+                            as: 'role',
+                            where: {
+                                nama_role: ['Sespri', 'Kasubag Media', 'Kasubag Protokol']
+                            }
+                        }]
+                    });
+
+                    const labelKehadiran = status_kehadiran === 'hadir' ? 'Hadir' : 'Diwakilkan';
+                    const pimpinanName = originalPimpinanObj?.pimpinan?.nama_pimpinan || 'Pimpinan';
+                    
+                    for (const recipient of recipients) {
+                        const role = recipient.role.nama_role;
+                        const isKasubag = role.startsWith('Kasubag');
+                        
+                        let targetUrl = '/sespri/agenda-pimpinan';
+                        if (role === 'Kasubag Media') targetUrl = '/kasubag-media/assign-staff';
+                        else if (role === 'Kasubag Protokol') targetUrl = '/kasubag-protokol/assign-staff';
+
+                        const notificationPayload = {
+                            title: 'Konfirmasi Kehadiran Pimpinan',
+                            body: `${pimpinanName} dikonfirmasi "${labelKehadiran}" untuk kegiatan: ${agenda.nama_kegiatan}.${isKasubag ? ' Silakan berikan penugasan.' : ''}`,
+                            data: {
+                                url: targetUrl,
+                                id_agenda: id_agenda,
+                                status: newOverallStatus
+                            }
+                        };
+                        await sendPushNotification(recipient.id_user, notificationPayload);
+                    }
+                } catch (notifError) {
+                    console.error('Error sending confirmation notifications to Kasubag/Sespri:', notifError);
+                }
+            }
+
+            // 5. Background Sync to Google Calendar
+            try {
+                if (!originalPimpinanObj) return this.sendResponse(res, 200, true, 'Status kehadiran berhasil diperbarui', agendaPimpinan);
+
+                const pimpinanToSync = await Pimpinan.findByPk(originalPimpinanObj.id_pimpinan);
+
+                if (pimpinanToSync && pimpinanToSync.is_calendar_synced) {
+                    const normalizedStatus = status_kehadiran?.toLowerCase();
+                    if (normalizedStatus === 'hadir') {
+                        const newEventId = await googleCalendarHelper.syncEvent(pimpinanToSync, agenda, agendaPimpinan.google_event_id);
+                        
+                        if (newEventId !== agendaPimpinan.google_event_id) {
+                            await agendaPimpinan.update({ google_event_id: newEventId });
+                        }
+                    } else {
+                        // If status changed from 'hadir' to something else, delete the event
+                        if (agendaPimpinan.google_event_id) {
+                            await googleCalendarHelper.deleteEvent(pimpinanToSync, agendaPimpinan.google_event_id);
+                            await agendaPimpinan.update({ google_event_id: null });
+                        }
+                    }
+                }
+            } catch (syncError) {
+                console.error('Scheduled Google Sync Failed:', syncError);
+            }
+
             return this.sendResponse(res, 200, true, 'Status kehadiran berhasil diperbarui', agendaPimpinan);
         } catch (error) {
             if (transaction) await transaction.rollback();
