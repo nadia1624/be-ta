@@ -258,6 +258,85 @@ class AuthController extends BaseController {
             return this.sendError(res, error, 'DeleteFoto error');
         }
     }
+    async forgotPassword(req, res) {
+        try {
+            const { email } = req.body;
+            if (!email) {
+                return this.sendResponse(res, 400, false, 'Email wajib diisi');
+            }
+
+            const user = await User.findOne({ where: { email } });
+            if (!user) {
+                // For security, don't confirm the user doesn't exist, 
+                // but we will only send email if it does.
+                // However, in many internal apps, a 404 is fine.
+                return this.sendResponse(res, 404, false, 'User dengan email tersebut tidak ditemukan');
+            }
+
+            // Generate reset token
+            const crypto = require('crypto');
+            const resetToken = crypto.randomBytes(32).toString('hex');
+            
+            // Hash and set reset password fields
+            user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+            user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+
+            await user.save();
+
+            // Send Email
+            const emailHelper = require('../helpers/emailHelper');
+            const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+            
+            try {
+                await emailHelper.sendPasswordResetEmail(user, resetUrl);
+                return this.sendResponse(res, 200, true, 'Instruksi reset password telah dikirim ke email Anda');
+            } catch (mailError) {
+                user.resetPasswordToken = null;
+                user.resetPasswordExpires = null;
+                await user.save();
+                return this.sendError(res, mailError, 'Gagal mengirim email reset password');
+            }
+        } catch (error) {
+            return this.sendError(res, error, 'ForgotPassword error');
+        }
+    }
+
+    async resetPassword(req, res) {
+        try {
+            const { token } = req.params;
+            const { password } = req.body;
+
+            if (!password || password.length < 8) {
+                return this.sendResponse(res, 400, false, 'Password baru minimal 8 karakter');
+            }
+
+            const crypto = require('crypto');
+            const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+            const user = await User.findOne({
+                where: {
+                    resetPasswordToken: hashedToken,
+                    resetPasswordExpires: { [require('sequelize').Op.gt]: Date.now() }
+                }
+            });
+
+            if (!user) {
+                return this.sendResponse(res, 400, false, 'Token tidak valid atau sudah kadaluarsa');
+            }
+
+            // Update password
+            const bcrypt = require('bcryptjs');
+            user.password = await bcrypt.hash(password, 10);
+            user.resetPasswordToken = null;
+            user.resetPasswordExpires = null;
+
+            await user.save();
+
+            return this.sendResponse(res, 200, true, 'Password berhasil diperbarui, silakan login kembali');
+        } catch (error) {
+            return this.sendError(res, error, 'ResetPassword error');
+        }
+    }
 }
 
 module.exports = new AuthController();

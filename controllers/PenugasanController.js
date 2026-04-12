@@ -102,7 +102,7 @@ class PenugasanController extends BaseController {
                         ]
                     }
                 ],
-                order: [['tanggal_kegiatan', 'ASC']]
+                order: [['updatedAt', 'DESC']]
             });
 
             return this.sendResponse(res, 200, true, 'Data agenda untuk penugasan berhasil diambil', agendas);
@@ -155,7 +155,7 @@ class PenugasanController extends BaseController {
                         ]
                     }
                 ],
-                order: [['tanggal_kegiatan', 'ASC']]
+                order: [['updatedAt', 'DESC']]
             });
 
             return this.sendResponse(res, 200, true, 'Data agenda untuk penugasan media berhasil diambil', agendas);
@@ -237,6 +237,44 @@ class PenugasanController extends BaseController {
 
             // Create SlotAgendaStaff records for each overlapping slot and each staff
             if (slots.length > 0) {
+                // === STAFF CONFLICT CHECK: Ensure no staff has overlapping assignments ===
+                const conflictingStaffSlots = await SlotAgendaStaff.findAll({
+                    where: {
+                        tanggal: agenda.tanggal_kegiatan,
+                        id_slot_waktu: { [Op.in]: slots.map(s => s.id_slot_waktu) },
+                        id_user_staff: { [Op.in]: staff_ids }
+                    },
+                    include: [
+                        { model: User, as: 'staff', attributes: ['id_user', 'nama'] },
+                        { 
+                            model: Penugasan, as: 'penugasan',
+                            include: [{ model: Agenda, as: 'agenda', attributes: ['nama_kegiatan', 'waktu_mulai', 'waktu_selesai'] }]
+                        }
+                    ],
+                    transaction
+                });
+
+                if (conflictingStaffSlots.length > 0) {
+                    // Group conflicts by staff
+                    const conflictsByStaff = {};
+                    conflictingStaffSlots.forEach(cs => {
+                        const staffName = cs.staff?.nama || cs.id_user_staff;
+                        if (!conflictsByStaff[staffName]) conflictsByStaff[staffName] = new Set();
+                        const agendaName = cs.penugasan?.agenda?.nama_kegiatan || 'agenda lain';
+                        conflictsByStaff[staffName].add(agendaName);
+                    });
+
+                    const conflictMessages = Object.entries(conflictsByStaff)
+                        .map(([staff, agendas]) => `${staff} (sudah ditugaskan di: ${[...agendas].join(', ')})`)
+                        .join('; ');
+
+                    await transaction.rollback();
+                    return this.sendResponse(res, 409, false, 
+                        `Jadwal staf bentrok! ${conflictMessages} pada tanggal dan waktu yang sama.`
+                    );
+                }
+                // === END STAFF CONFLICT CHECK ===
+
                 const staffAssignments = [];
                 for (const slot of slots) {
                     for (const id_user_staff of staff_ids) {
@@ -353,7 +391,7 @@ class PenugasanController extends BaseController {
                         ]
                     }
                 ],
-                order: [['tanggal_penugasan', 'DESC']]
+                order: [['createdAt', 'DESC']]
             });
 
             // Compute status_pelaksanaan dynamically

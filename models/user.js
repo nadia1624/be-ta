@@ -96,6 +96,14 @@ module.exports = (sequelize, DataTypes) => {
     jabatan: {
       type: DataTypes.STRING(50),
       allowNull: true
+    },
+    resetPasswordToken: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    resetPasswordExpires: {
+      type: DataTypes.DATE,
+      allowNull: true
     }
   }, {
     sequelize,

@@ -47,7 +47,7 @@ class DashboardController extends BaseController {
             // 4. Recent Requests (limit 5)
             const recentRequests = await Agenda.findAll({
                 limit: 5,
-                order: [['createdAt', 'DESC']],
+                order: [['updatedAt', 'DESC']],
                 include: [
                     {
                         model: User,
@@ -89,7 +89,7 @@ class DashboardController extends BaseController {
                     }
                 },
                 limit: 5,
-                order: [['tanggal_kegiatan', 'ASC'], ['waktu_mulai', 'ASC']]
+                order: [['updatedAt', 'DESC']]
             });
 
             const upcomingAgenda = await Agenda.findAll({
@@ -98,7 +98,7 @@ class DashboardController extends BaseController {
                         [Op.in]: upcomingAgendaIds.map(a => a.id_agenda)
                     }
                 },
-                order: [['tanggal_kegiatan', 'ASC'], ['waktu_mulai', 'ASC']],
+                order: [['updatedAt', 'DESC']],
                 include: [
                     {
                         model: StatusAgenda,
@@ -347,7 +347,7 @@ class DashboardController extends BaseController {
                     }
                 },
                 limit: 5,
-                order: [['createdAt', 'DESC']],
+                order: [['updatedAt', 'DESC']],
                 include: [
                     {
                         model: User,
@@ -363,7 +363,7 @@ class DashboardController extends BaseController {
                     tanggal_kegiatan: { [Op.gt]: today }
                 },
                 limit: 5,
-                order: [['tanggal_kegiatan', 'ASC']],
+                order: [['updatedAt', 'DESC']],
                 include: [
                     {
                         model: StatusAgenda,
@@ -541,7 +541,7 @@ class DashboardController extends BaseController {
             const draftPerluReview = await DraftBerita.findAll({
                 where: { status_draft: 'draft' },
                 limit: 5,
-                order: [['createdAt', 'DESC']],
+                order: [['updatedAt', 'DESC']],
                 include: [
                     {
                         model: User,
@@ -572,7 +572,7 @@ class DashboardController extends BaseController {
                     }
                 },
                 limit: 5,
-                order: [['tanggal_kegiatan', 'ASC'], ['waktu_mulai', 'ASC']]
+                order: [['updatedAt', 'DESC']]
             });
 
             const dashboardData = {
@@ -763,7 +763,7 @@ class DashboardController extends BaseController {
                     }
                 },
                 limit: 5,
-                order: [['tanggal_kegiatan', 'ASC'], ['waktu_mulai', 'ASC']]
+                order: [['updatedAt', 'DESC']]
             });
 
             const dashboardData = {

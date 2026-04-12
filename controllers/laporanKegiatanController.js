@@ -54,6 +54,11 @@ class LaporanKegiatanController extends BaseController {
                         as: 'slotAgendaStaffs',
                         where: { id_user_staff: id_user },
                         required: true
+                    },
+                    {
+                        model: Agenda,
+                        as: 'agenda',
+                        attributes: ['id_agenda', 'tanggal_kegiatan']
                     }
                 ],
                 transaction
@@ -62,6 +67,15 @@ class LaporanKegiatanController extends BaseController {
             if (!penugasan) {
                 await transaction.rollback();
                 return this.sendResponse(res, 404, false, 'Penugasan tidak ditemukan atau Anda tidak memiliki akses');
+            }
+
+            // Verify if today is >= agenda date
+            const today = new Date().toISOString().split('T')[0];
+            const agendaDate = penugasan.agenda?.tanggal_kegiatan;
+
+            if (agendaDate && today < agendaDate) {
+                await transaction.rollback();
+                return this.sendResponse(res, 403, false, `Laporan hanya dapat ditambahkan pada hari H (${agendaDate}) atau setelah kegiatan berlangsung`);
             }
 
             const id_laporan = await this.generateLaporanId(transaction);
@@ -79,11 +93,6 @@ class LaporanKegiatanController extends BaseController {
                 catatan_laporan: catatan_laporan || null,
                 dokumentasi_laporan
             }, { transaction });
-
-            // Update penugasan status to 'progress' if it's still 'pending'
-            if (!penugasan.status || penugasan.status === 'pending') {
-                await penugasan.update({ status: 'progress' }, { transaction });
-            }
 
             await transaction.commit();
 
@@ -119,7 +128,7 @@ class LaporanKegiatanController extends BaseController {
                 include: [
                     { model: User, as: 'staff', attributes: ['id_user', 'nama'] }
                 ],
-                order: [['createdAt', 'ASC']]
+                order: [['createdAt', 'DESC']]
             });
 
             return this.sendResponse(res, 200, true, 'Data laporan berhasil diambil', laporan);

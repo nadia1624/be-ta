@@ -1,5 +1,5 @@
 const BaseController = require('./BaseController');
-const { Agenda, StatusAgenda, AgendaPimpinan, SlotAgendaPimpinan, PeriodeJabatan, JabatanPimpinan, Pimpinan, SlotWaktu, User, PimpinanAjudan, Penugasan, LaporanKegiatan, Role, KASKPDPendamping,KASKPD, sequelize } = require('../models');
+const { Agenda, StatusAgenda, AgendaPimpinan, SlotAgendaPimpinan, PeriodeJabatan, SlotAgendaStaff, JabatanPimpinan, Pimpinan, SlotWaktu, User, PimpinanAjudan, Penugasan, LaporanKegiatan, Role, KASKPDPendamping,KASKPD, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const googleCalendarHelper = require('../helpers/googleCalendarHelper');
 const { sendPushNotification } = require('../helpers/pushNotificationHelper');
@@ -70,6 +70,19 @@ class AgendaController extends BaseController {
                 await transaction.rollback();
                 const errorMsg = !req.file ? 'Surat permohonan wajib diupload' : 'Nomor surat, perihal, nama kegiatan, dan waktu kegiatan wajib diisi';
                 return this.sendResponse(res, 400, false, errorMsg);
+            }
+
+            // Date validation (must be in the future - after today)
+            const today = new Date().toISOString().split('T')[0];
+            if (tanggal_kegiatan <= today) {
+                await transaction.rollback();
+                return this.sendResponse(res, 400, false, 'Tanggal kegiatan harus setelah hari ini (minimal besok)');
+            }
+
+            // Time validation (end time must be after start time)
+            if (waktu_selesai <= waktu_mulai) {
+                await transaction.rollback();
+                return this.sendResponse(res, 400, false, 'Waktu selesai tidak boleh lebih awal dari waktu mulai.');
             }
 
             const id_agenda = await this.generateAgendaId(transaction);
@@ -208,7 +221,7 @@ class AgendaController extends BaseController {
                         }]
                     }
                 ],
-                order: [['createdAt', 'DESC']]
+                order: [['updatedAt', 'DESC']]
             });
 
             return this.sendResponse(res, 200, true, 'Data agenda berhasil diambil', agendas);
@@ -273,7 +286,7 @@ class AgendaController extends BaseController {
                         }]
                     }
                 ],
-                order: [['createdAt', 'DESC']]
+                order: [['updatedAt', 'DESC']]
             });
 
             return this.sendResponse(res, 200, true, 'Data agenda berhasil diambil', agendas);
@@ -316,6 +329,9 @@ class AgendaController extends BaseController {
                 tanggal_status: new Date(),
                 catatan: catatan || null
             }, { transaction });
+
+            // Touch Agenda record to update its updatedAt timestamp for activity-based sorting
+            await agenda.update({ updatedAt: new Date() }, { transaction });
 
             await transaction.commit();
 
@@ -460,6 +476,23 @@ class AgendaController extends BaseController {
                 kaskpd_pendamping
             } = req.body;
 
+            const todayStr = new Date().toISOString().split('T')[0];
+            
+            // Validate tanggal_kegiatan if provided
+            if (tanggal_kegiatan && tanggal_kegiatan <= todayStr) {
+                await transaction.rollback();
+                return this.sendResponse(res, 400, false, 'Tanggal kegiatan harus setelah hari ini (minimal besok)');
+            }
+
+            // Validate time range if both provided, or if one is provided use the existing one from the record
+            const finalStart = waktu_mulai || agenda.waktu_mulai;
+            const finalEnd = waktu_selesai || agenda.waktu_selesai;
+
+            if (finalStart && finalEnd && finalEnd <= finalStart) {
+                await transaction.rollback();
+                return this.sendResponse(res, 400, false, 'Waktu selesai tidak boleh lebih awal dari waktu mulai.');
+            }
+
             const surat_permohonan = req.file ? req.file.path : undefined;
 
             const updateData = {};
@@ -544,6 +577,9 @@ class AgendaController extends BaseController {
                     tanggal_status: new Date(),
                     catatan: 'Permohonan telah direvisi oleh pemohon'
                 }, { transaction });
+
+                // Touch Agenda record for activity-based sorting
+                await agenda.update({ updatedAt: new Date() }, { transaction });
             }
 
             await transaction.commit();
@@ -695,7 +731,7 @@ class AgendaController extends BaseController {
                         }]
                     }
                 ],
-                order: [['tanggal_kegiatan', 'ASC'], ['waktu_mulai', 'ASC']]
+                order: [['updatedAt', 'DESC']]
             });
 
             return this.sendResponse(res, 200, true, 'Data agenda pimpinan berhasil diambil', agendas);
@@ -865,6 +901,58 @@ class AgendaController extends BaseController {
                     transaction
                 });
 
+                // === CONFLICT CHECK: Check if the actual attending pimpinan already has slots on the same date & overlapping time for a DIFFERENT agenda ===
+                if (slots.length > 0) {
+                    const conflictingSlots = await SlotAgendaPimpinan.findAll({
+                        where: {
+                            tanggal: agenda.tanggal_kegiatan,
+                            id_slot_waktu: { [Op.in]: slots.map(s => s.id_slot_waktu) },
+                            id_jabatan_hadir: actualJabatan,
+                            id_periode_hadir: actualPeriode,
+                            id_agenda: { [Op.ne]: id_agenda }, // Different agenda
+                            kehadiran: 'hadir'
+                        },
+                        include: [{
+                            model: Agenda,
+                            as: 'agenda',
+                            attributes: ['id_agenda', 'nama_kegiatan', 'waktu_mulai', 'waktu_selesai']
+                        }],
+                        transaction
+                    });
+
+                    if (conflictingSlots.length > 0) {
+                        // Get the conflicting pimpinan name
+                        const conflictingPimpinan = await PeriodeJabatan.findOne({
+                            where: { id_jabatan: actualJabatan, id_periode: actualPeriode },
+                            include: [
+                                { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] },
+                                { model: JabatanPimpinan, as: 'jabatan', attributes: ['nama_jabatan'] }
+                            ],
+                            transaction
+                        });
+
+                        const pimpinanName = conflictingPimpinan?.pimpinan?.nama_pimpinan || 'Pimpinan';
+                        const jabatanName = conflictingPimpinan?.jabatan?.nama_jabatan || '';
+                        
+                        // Collect unique conflicting agenda names
+                        const conflictingAgendaNames = [...new Set(conflictingSlots
+                            .map(cs => cs.agenda?.nama_kegiatan)
+                            .filter(Boolean)
+                        )];
+
+                        const conflictingAgendaTimes = [...new Set(conflictingSlots
+                            .map(cs => cs.agenda ? `${cs.agenda.waktu_mulai?.slice(0,5)}-${cs.agenda.waktu_selesai?.slice(0,5)}` : null)
+                            .filter(Boolean)
+                        )];
+
+                        await transaction.rollback();
+                        return this.sendResponse(res, 409, false, 
+                            `Jadwal bentrok! ${pimpinanName}${jabatanName ? ' (' + jabatanName + ')' : ''} sudah memiliki agenda "${conflictingAgendaNames.join(', ')}" (${conflictingAgendaTimes.join(', ')}) pada tanggal yang sama dan waktu yang bersinggungan.`
+                        );
+                    }
+                }
+                // === END CONFLICT CHECK ===
+
                 for (const slot of slots) {
                     const existingSlot = await SlotAgendaPimpinan.findOne({
                         where: {
@@ -898,6 +986,36 @@ class AgendaController extends BaseController {
                 }
             }
 
+            // === STAFF CLEANUP: If no more leaders are attending this agenda, remove staff assignments ===
+            const remainingPimpinanSlotsCount = await SlotAgendaPimpinan.count({
+                where: { id_agenda },
+                transaction
+            });
+
+            if (remainingPimpinanSlotsCount === 0) {
+                const penugasans = await Penugasan.findAll({
+                    where: { id_agenda },
+                    transaction
+                });
+
+                if (penugasans.length > 0) {
+                    const penugasanIds = penugasans.map(p => p.id_penugasan);
+                    
+                    // Delete staff slots
+                    await SlotAgendaStaff.destroy({
+                        where: { id_penugasan: { [Op.in]: penugasanIds } },
+                        transaction
+                    });
+
+                    // Delete penugasan
+                    await Penugasan.destroy({
+                        where: { id_agenda },
+                        transaction
+                    });
+                }
+            }
+            // === END STAFF CLEANUP ===
+
             // 3. Auto-update StatusAgenda
             let newOverallStatus = null;
             if (status_kehadiran === 'hadir') newOverallStatus = 'approved_ajudan';
@@ -914,6 +1032,9 @@ class AgendaController extends BaseController {
                     tanggal_status: new Date(),
                     catatan: `Status diperbarui oleh Ajudan/Sespri via kehadiran: ${status_kehadiran}`
                 }, { transaction });
+
+                // Touch Agenda record to update its updatedAt timestamp for activity-based sorting
+                await Agenda.update({ updatedAt: new Date() }, { where: { id_agenda }, transaction });
             }
 
             await transaction.commit();

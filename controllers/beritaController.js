@@ -140,10 +140,22 @@ class BeritaController extends BaseController {
             }
 
             // Check if penugasan exists
-            const penugasan = await Penugasan.findByPk(id_penugasan);
+            const penugasan = await Penugasan.findByPk(id_penugasan, {
+                include: [{ model: Agenda, as: 'agenda', attributes: ['tanggal_kegiatan'] }],
+                transaction
+            });
             if (!penugasan) {
                 await transaction.rollback();
                 return this.sendResponse(res, 404, false, 'Penugasan tidak ditemukan');
+            }
+
+            // Verify if today is >= agenda date
+            const today = new Date().toISOString().split('T')[0];
+            const agendaDate = penugasan.agenda?.tanggal_kegiatan;
+
+            if (agendaDate && today < agendaDate) {
+                await transaction.rollback();
+                return this.sendResponse(res, 403, false, `Draft berita hanya dapat diserahkan pada hari H (${agendaDate}) atau setelah kegiatan berlangsung`);
             }
 
             // Cek apakah draft sudah ada untuk penugasan ini

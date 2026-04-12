@@ -43,5 +43,7 @@ router.put('/me', authenticateToken, authController.updateProfile);
 router.post('/change-password', authenticateToken, authController.changePassword);
 router.post('/me/foto', authenticateToken, uploadProfile.single('foto'), authController.uploadFoto);
 router.delete('/me/foto', authenticateToken, authController.deleteFoto);
+router.post('/forgot-password', authController.forgotPassword);
+router.post('/reset-password/:token', authController.resetPassword);
 
 module.exports = router;
