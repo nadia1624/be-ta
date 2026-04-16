@@ -62,6 +62,10 @@ module.exports = (sequelize, DataTypes) => {
     google_event_id: {
       type: DataTypes.STRING,
       allowNull: true
+    },
+    tanda_tangan: {
+      type: DataTypes.STRING,
+      allowNull: true
     }
   }, {
     sequelize,

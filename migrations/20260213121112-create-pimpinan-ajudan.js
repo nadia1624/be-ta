@@ -29,6 +29,11 @@ module.exports = {
         type: Sequelize.TEXT,
         allowNull: true
       },
+      status_aktif: {
+        type: Sequelize.ENUM('aktif', 'nonaktif'),
+        defaultValue: 'aktif',
+        allowNull: false
+      },
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE,
@@ -60,6 +65,10 @@ module.exports = {
     });
     await queryInterface.addIndex('PimpinanAjudans', ['id_periode'], {
       name: 'idx_pimpinan_ajudans_periode'
+    });
+    await queryInterface.addIndex('PimpinanAjudans', ['id_user_ajudan', 'id_periode'], {
+      unique: true,
+      name: 'unique_ajudan_per_periode'
     });
   },
 

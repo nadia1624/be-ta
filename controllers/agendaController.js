@@ -72,6 +72,11 @@ class AgendaController extends BaseController {
                 return this.sendResponse(res, 400, false, errorMsg);
             }
 
+            if (req.file && req.file.size > 5 * 1024 * 1024) {
+                await transaction.rollback();
+                return this.sendResponse(res, 400, false, 'Ukuran file surat permohonan maksimal 5 MB');
+            }
+
             // Date validation (must be in the future - after today)
             const today = new Date().toISOString().split('T')[0];
             if (tanggal_kegiatan <= today) {
@@ -495,6 +500,11 @@ class AgendaController extends BaseController {
 
             const surat_permohonan = req.file ? req.file.path : undefined;
 
+            if (req.file && req.file.size > 5 * 1024 * 1024) {
+                await transaction.rollback();
+                return this.sendResponse(res, 400, false, 'Ukuran file surat permohonan maksimal 5 MB');
+            }
+
             const updateData = {};
             if (nomor_surat) updateData.nomor_surat = nomor_surat;
             if (tanggal_surat) updateData.tanggal_surat = tanggal_surat;
@@ -613,7 +623,10 @@ class AgendaController extends BaseController {
             if (nama_role === 'Ajudan') {
                 const { PimpinanAjudan } = require('../models');
                 const assignments = await PimpinanAjudan.findAll({
-                    where: { id_user_ajudan: id_user },
+                    where: { 
+                        id_user_ajudan: id_user,
+                        status_aktif: 'aktif'
+                    },
                     attributes: ['id_jabatan', 'id_periode']
                 });
 
@@ -749,7 +762,12 @@ class AgendaController extends BaseController {
             // Security Check: If Ajudan, verify they are assigned to this leader
             if (nama_role === 'Ajudan') {
                 const assignment = await PimpinanAjudan.findOne({
-                    where: { id_user_ajudan: id_user, id_jabatan, id_periode },
+                    where: { 
+                        id_user_ajudan: id_user, 
+                        id_jabatan, 
+                        id_periode,
+                        status_aktif: 'aktif'
+                    },
                     transaction
                 });
                 if (!assignment) {
@@ -758,7 +776,7 @@ class AgendaController extends BaseController {
                 }
             }
 
-            const { status_kehadiran, id_jabatan_perwakilan, id_periode_perwakilan, nama_perwakilan, keterangan } = req.body;
+            const { status_kehadiran, id_jabatan_perwakilan, id_periode_perwakilan, nama_perwakilan, keterangan, tanda_tangan } = req.body;
 
             const agendaPimpinan = await AgendaPimpinan.findOne({
                 where: { id_agenda, id_jabatan, id_periode },
@@ -777,6 +795,7 @@ class AgendaController extends BaseController {
             let finalNamaPerwakilan = nama_perwakilan;
             let finalJabatanPerwakilan = '-';
             let originalPimpinanObj = null;
+            let signaturePath = null;
 
             // Fetch original Pimpinan details for the PDF
             const origPimpinan = await PeriodeJabatan.findOne({
@@ -813,6 +832,20 @@ class AgendaController extends BaseController {
 
                 const filename = `disposisi-${id_agenda}-${id_jabatan}-${Date.now()}.pdf`;
                 const filepath = path.join(disposisiDir, filename);
+
+                // Handle Digital Signature
+                if (tanda_tangan && status_kehadiran === 'diwakilkan') {
+                    const signatureDir = path.join(__dirname, '../uploads/signatures');
+                    if (!fs.existsSync(signatureDir)) {
+                        fs.mkdirSync(signatureDir, { recursive: true });
+                    }
+                    const sigFilename = `sig-${id_agenda}-${id_jabatan}-${Date.now()}.png`;
+                    signaturePath = path.join(signatureDir, sigFilename);
+                    
+                    // Decode base64
+                    const base64Data = tanda_tangan.replace(/^data:image\/png;base64,/, "");
+                    fs.writeFileSync(signaturePath, base64Data, 'base64');
+                }
 
                 await new Promise((resolve, reject) => {
                     const doc = new PDFDocument({ margin: 50 });
@@ -858,6 +891,17 @@ class AgendaController extends BaseController {
                     doc.text('_______________________', { align: 'right' });
                     doc.text(`NAMA: ${req.user.nama}`, { align: 'right' });
 
+                    // Add Digital Signature of Pimpinan if available
+                    if (signaturePath && fs.existsSync(signaturePath)) {
+                        doc.moveDown(2);
+                        doc.fontSize(10).font('Helvetica-Bold').text('Tanda Tangan Pimpinan:', { align: 'left' });
+                        doc.image(signaturePath, {
+                            fit: [150, 80],
+                            align: 'left'
+                        });
+                        doc.fontSize(10).font('Helvetica').text(`${originalPimpinanObj?.pimpinan?.nama_pimpinan || '-'}`, { align: 'left' });
+                    }
+
                     doc.end();
 
                     writeStream.on('finish', resolve);
@@ -872,7 +916,8 @@ class AgendaController extends BaseController {
                 status_kehadiran,
                 nama_perwakilan: status_kehadiran === 'diwakilkan' ? finalNamaPerwakilan : null,
                 keterangan,
-                surat_disposisi
+                surat_disposisi,
+                tanda_tangan: status_kehadiran === 'diwakilkan' && signaturePath ? signaturePath.split('uploads')[1].replace(/\\/g, '/').replace(/^\//, 'uploads/') : null
             }, { transaction });
 
             // 2. Manage SlotAgendaPimpinan

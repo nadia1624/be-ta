@@ -33,6 +33,7 @@ app.use('/api/laporan-kegiatan', require('./routes/laporanKegiatanRoutes'));
 app.use('/api/dashboards', require('./routes/dashboardRoutes'));
 app.use('/api/google-auth', require('./routes/googleAuthRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/ajudan-assignments', require('./routes/ajudanAssignmentRoutes'));
 
 // Health check
 app.get('/', (req, res) => {

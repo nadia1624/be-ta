@@ -93,9 +93,7 @@ class AuthController extends BaseController {
                 nama_role: user.role.nama_role
             };
 
-            const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
-                expiresIn: process.env.JWT_EXPIRES_IN || '24h'
-            });
+            const token = jwt.sign(tokenPayload, process.env.JWT_SECRET);
 
             const userData = {
                 id_user: user.id_user,

@@ -1,5 +1,5 @@
 const BaseController = require('./BaseController');
-const { Pimpinan, PeriodeJabatan, PimpinanAjudan, JabatanPimpinan, Periode } = require('../models');
+const { Pimpinan, PeriodeJabatan, PimpinanAjudan, JabatanPimpinan, Periode, Sequelize } = require('../models');
 const emailHelper = require('../helpers/emailHelper');
 const googleCalendarHelper = require('../helpers/googleCalendarHelper');
 
@@ -151,7 +151,14 @@ class PimpinanController extends BaseController {
                 include.push({
                     model: PimpinanAjudan,
                     as: 'pimpinanAjudans',
-                    where: { id_user_ajudan: id_user }
+                    on: {
+                        id_jabatan: { [Sequelize.Op.col]: 'PeriodeJabatan.id_jabatan' },
+                        id_periode: { [Sequelize.Op.col]: 'PeriodeJabatan.id_periode' }
+                    },
+                    where: { 
+                        id_user_ajudan: id_user,
+                        status_aktif: 'aktif'
+                    }
                 });
             }
 

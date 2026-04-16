@@ -87,18 +87,6 @@ class UserController extends BaseController {
                 jabatan
             });
 
-            const role = await Role.findByPk(role_id);
-            if (role && role.nama_role.toLowerCase() === 'ajudan') {
-                if (id_jabatan_ajudan && id_periode_ajudan) {
-                    await PimpinanAjudan.create({
-                        id_user_ajudan: newUser.id_user,
-                        id_jabatan: id_jabatan_ajudan,
-                        id_periode: id_periode_ajudan,
-                        keterangan: keterangan_ajudan || 'Assignment Ajudan'
-                    });
-                }
-            }
-
             return this.sendResponse(res, 201, true, 'User berhasil dibuat', newUser);
         } catch (error) {
             return this.sendError(res, error, 'Error creating user');
@@ -135,30 +123,6 @@ class UserController extends BaseController {
             }
 
             await user.save();
-
-            // Handle Role specific logic
-            const role = await Role.findByPk(role_id);
-            
-            if (role && role.nama_role.toLowerCase() === 'ajudan') {
-                 if (id_jabatan_ajudan && id_periode_ajudan) {
-                     const existingAssignment = await PimpinanAjudan.findOne({
-                         where: { id_user_ajudan: id_user }
-                     });
-
-                     if (existingAssignment) {
-                         await existingAssignment.destroy();
-                     }
-
-                     await PimpinanAjudan.create({
-                        id_user_ajudan: id_user,
-                        id_jabatan: id_jabatan_ajudan,
-                        id_periode: id_periode_ajudan,
-                        keterangan: 'Assignment Ajudan Update'
-                    });
-                 }
-            } else {
-                await PimpinanAjudan.destroy({ where: { id_user_ajudan: id_user } });
-            }
 
             return this.sendResponse(res, 200, true, 'User berhasil diupdate');
         } catch (error) {

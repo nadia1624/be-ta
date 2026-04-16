@@ -47,6 +47,10 @@ module.exports = (sequelize, DataTypes) => {
     keterangan: {
       type: DataTypes.TEXT,
       allowNull: true
+    },
+    status_aktif: {
+      type: DataTypes.ENUM('aktif', 'nonaktif'),
+      defaultValue: 'nonaktif'
     }
   }, {
     sequelize,
