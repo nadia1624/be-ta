@@ -188,8 +188,7 @@ class AgendaController extends BaseController {
                     {
                         model: StatusAgenda,
                         as: 'statusAgendas',
-                        order: [['createdAt', 'DESC']],
-                        limit: 1
+                        order: [['createdAt', 'DESC']]
                     },
                     {
                         model: AgendaPimpinan,
@@ -359,7 +358,7 @@ class AgendaController extends BaseController {
                     title: 'Update Status Agenda',
                     body: `Agenda "${agenda.nama_kegiatan}" Anda sekarang berstatus: ${currentStatusLabel}.`,
                     data: {
-                        url: '/pemohon/agenda',
+                        url: '/pemohon/riwayat-permohonan',
                         id_agenda: agenda.id_agenda,
                         status: status
                     }
@@ -593,7 +592,47 @@ class AgendaController extends BaseController {
             }
 
             await transaction.commit();
-            return this.sendResponse(res, 200, true, 'Agenda berhasil diperbarui', agenda);
+
+            // Reload agenda with all includes to ensure frontend gets updated associations (like KASKPD)
+            const updatedAgenda = await Agenda.findByPk(id_agenda, {
+                include: [
+                    {
+                        model: StatusAgenda,
+                        as: 'statusAgendas',
+                        order: [['createdAt', 'DESC']]
+                    },
+                    {
+                        model: User,
+                        as: 'pemohon',
+                        attributes: ['nama', 'instansi']
+                    },
+                    {
+                        model: AgendaPimpinan,
+                        as: 'agendaPimpinans',
+                        include: [
+                            {
+                                model: PeriodeJabatan,
+                                as: 'periodeJabatan',
+                                include: [
+                                    { model: JabatanPimpinan, as: 'jabatan' },
+                                    { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        model: KASKPDPendamping,
+                        as: 'kaskpdPendampings',
+                        include: [{
+                            model: KASKPD,
+                            as: 'kaskpd',
+                            attributes: ['id_ka_skpd', 'nama_instansi']
+                        }]
+                    }
+                ]
+            });
+
+            return this.sendResponse(res, 200, true, 'Agenda berhasil diperbarui', updatedAgenda);
         } catch (error) {
             await transaction.rollback();
             return this.sendError(res, error, 'Gagal memperbarui agenda');
@@ -776,7 +815,7 @@ class AgendaController extends BaseController {
                 }
             }
 
-            const { status_kehadiran, id_jabatan_perwakilan, id_periode_perwakilan, nama_perwakilan, keterangan, tanda_tangan } = req.body;
+            const { status_kehadiran, id_jabatan_perwakilan, id_periode_perwakilan, nama_perwakilan, keterangan } = req.body;
 
             const agendaPimpinan = await AgendaPimpinan.findOne({
                 where: { id_agenda, id_jabatan, id_periode },
@@ -789,15 +828,11 @@ class AgendaController extends BaseController {
                 return this.sendResponse(res, 404, false, 'Data agenda pimpinan tidak ditemukan');
             }
 
-            const agenda = agendaPimpinan.agenda;
-            let surat_disposisi = agendaPimpinan.surat_disposisi;
-
             let finalNamaPerwakilan = nama_perwakilan;
             let finalJabatanPerwakilan = '-';
             let originalPimpinanObj = null;
-            let signaturePath = null;
 
-            // Fetch original Pimpinan details for the PDF
+            // Fetch original Pimpinan details
             const origPimpinan = await PeriodeJabatan.findOne({
                 where: { id_jabatan, id_periode },
                 include: [{ model: Pimpinan, as: 'pimpinan' }, { model: JabatanPimpinan, as: 'jabatan' }],
@@ -807,117 +842,23 @@ class AgendaController extends BaseController {
                originalPimpinanObj = origPimpinan;
             }
 
-            if (status_kehadiran === 'diwakilkan') {
-                if (id_jabatan_perwakilan) {
-                    const rep = await PeriodeJabatan.findOne({
-                        where: { id_jabatan: id_jabatan_perwakilan, id_periode: id_periode_perwakilan },
-                        include: [{ model: Pimpinan, as: 'pimpinan' }, { model: JabatanPimpinan, as: 'jabatan' }],
-                        transaction
-                    });
-                    if (rep && rep.pimpinan) {
-                        finalNamaPerwakilan = rep.pimpinan.nama_pimpinan;
-                        finalJabatanPerwakilan = rep.jabatan?.nama_jabatan || '-';
-                    }
-                }
-
-                // Generate PDF Disposisi automatically
-                const fs = require('fs');
-                const path = require('path');
-                const PDFDocument = require('pdfkit');
-                
-                const disposisiDir = path.join(__dirname, '../uploads/surat_disposisi');
-                if (!fs.existsSync(disposisiDir)) {
-                    fs.mkdirSync(disposisiDir, { recursive: true });
-                }
-
-                const filename = `disposisi-${id_agenda}-${id_jabatan}-${Date.now()}.pdf`;
-                const filepath = path.join(disposisiDir, filename);
-
-                // Handle Digital Signature
-                if (tanda_tangan && status_kehadiran === 'diwakilkan') {
-                    const signatureDir = path.join(__dirname, '../uploads/signatures');
-                    if (!fs.existsSync(signatureDir)) {
-                        fs.mkdirSync(signatureDir, { recursive: true });
-                    }
-                    const sigFilename = `sig-${id_agenda}-${id_jabatan}-${Date.now()}.png`;
-                    signaturePath = path.join(signatureDir, sigFilename);
-                    
-                    // Decode base64
-                    const base64Data = tanda_tangan.replace(/^data:image\/png;base64,/, "");
-                    fs.writeFileSync(signaturePath, base64Data, 'base64');
-                }
-
-                await new Promise((resolve, reject) => {
-                    const doc = new PDFDocument({ margin: 50 });
-                    const writeStream = fs.createWriteStream(filepath);
-                    doc.pipe(writeStream);
-
-                    // Header
-                    doc.fontSize(16).font('Helvetica-Bold').text('SURAT DISPOSISI KEHADIRAN', { align: 'center' });
-                    doc.moveDown(2);
-
-                    // Body
-                    doc.fontSize(12).font('Helvetica').text('Dengan hormat,', { align: 'left' });
-                    doc.moveDown(1);
-                    doc.text('Sehubungan dengan undangan kegiatan berikut:');
-                    doc.moveDown(0.5);
-                    doc.text(`Nama Kegiatan  : ${agenda.nama_kegiatan}`);
-                    doc.text(`Waktu               : ${new Date(agenda.tanggal_kegiatan).toLocaleDateString('id-ID')} (${agenda.waktu_mulai} - ${agenda.waktu_selesai}) WIB`);
-                    doc.text(`Tempat             : ${agenda.lokasi_kegiatan}`);
-                    doc.moveDown(1);
-                    
-                    doc.text('Bahwa Pimpinan:');
-                    doc.font('Helvetica-Bold').text(`${originalPimpinanObj ? originalPimpinanObj.pimpinan.nama_pimpinan : '-'} (${originalPimpinanObj ? originalPimpinanObj.jabatan.nama_jabatan : '-'})`);
-                    doc.font('Helvetica').moveDown(1);
-                    
-                    doc.text('Menugaskan dan mendelegasikan kehadiran kepada:');
-                    doc.font('Helvetica-Bold').text(`${finalNamaPerwakilan} ${finalJabatanPerwakilan !== '-' ? `(${finalJabatanPerwakilan})` : ''}`);
-                    doc.font('Helvetica').moveDown(1);
-                    
-                    if (keterangan) {
-                       doc.text(`Catatan/Instruksi Tambahan:`);
-                       doc.font('Helvetica-Oblique').text(`"${keterangan}"`);
-                       doc.font('Helvetica').moveDown(1);
-                    }
-
-                    doc.text('Demikian surat disposisi ini dibuat agar dapat dilaksanakan dengan penuh tanggung jawab.');
-                    doc.moveDown(3);
-
-                    // Footer Signature Area
-                    const todayDate = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
-                    doc.text(`Bandung, ${todayDate}`, { align: 'right' });
-                    doc.text('Ajudan Pimpinan', { align: 'right' });
-                    doc.moveDown(3);
-                    doc.text('_______________________', { align: 'right' });
-                    doc.text(`NAMA: ${req.user.nama}`, { align: 'right' });
-
-                    // Add Digital Signature of Pimpinan if available
-                    if (signaturePath && fs.existsSync(signaturePath)) {
-                        doc.moveDown(2);
-                        doc.fontSize(10).font('Helvetica-Bold').text('Tanda Tangan Pimpinan:', { align: 'left' });
-                        doc.image(signaturePath, {
-                            fit: [150, 80],
-                            align: 'left'
-                        });
-                        doc.fontSize(10).font('Helvetica').text(`${originalPimpinanObj?.pimpinan?.nama_pimpinan || '-'}`, { align: 'left' });
-                    }
-
-                    doc.end();
-
-                    writeStream.on('finish', resolve);
-                    writeStream.on('error', reject);
+            // If represented by another leader in the system, fetch their name
+            if (status_kehadiran === 'diwakilkan' && id_jabatan_perwakilan) {
+                const repPimpinan = await PeriodeJabatan.findOne({
+                    where: { id_jabatan: id_jabatan_perwakilan, id_periode: id_periode_perwakilan },
+                    include: [{ model: Pimpinan, as: 'pimpinan' }],
+                    transaction
                 });
-
-                surat_disposisi = `uploads/surat_disposisi/${filename}`;
+                if (repPimpinan && repPimpinan.pimpinan) {
+                    finalNamaPerwakilan = repPimpinan.pimpinan.nama_pimpinan;
+                }
             }
 
             // 1. Update AgendaPimpinan
             await agendaPimpinan.update({
                 status_kehadiran,
                 nama_perwakilan: status_kehadiran === 'diwakilkan' ? finalNamaPerwakilan : null,
-                keterangan,
-                surat_disposisi,
-                tanda_tangan: status_kehadiran === 'diwakilkan' && signaturePath ? signaturePath.split('uploads')[1].replace(/\\/g, '/').replace(/^\//, 'uploads/') : null
+                keterangan
             }, { transaction });
 
             // 2. Manage SlotAgendaPimpinan
@@ -939,18 +880,18 @@ class AgendaController extends BaseController {
                 // Overlap condition: slot overlaps agenda if slot_start < agenda_end AND slot_end > agenda_start
                 const slots = await SlotWaktu.findAll({
                     where: {
-                        slot_waktu_mulai: { [Op.lt]: agenda.waktu_selesai },
-                        slot_waktu_selesai: { [Op.gt]: agenda.waktu_mulai }
+                        slot_waktu_mulai: { [Op.lt]: agendaPimpinan.agenda.waktu_selesai },
+                        slot_waktu_selesai: { [Op.gt]: agendaPimpinan.agenda.waktu_mulai }
                     },
                     order: [['slot_waktu_mulai', 'ASC']],
                     transaction
                 });
-
+ 
                 // === CONFLICT CHECK: Check if the actual attending pimpinan already has slots on the same date & overlapping time for a DIFFERENT agenda ===
                 if (slots.length > 0) {
                     const conflictingSlots = await SlotAgendaPimpinan.findAll({
                         where: {
-                            tanggal: agenda.tanggal_kegiatan,
+                            tanggal: agendaPimpinan.agenda.tanggal_kegiatan,
                             id_slot_waktu: { [Op.in]: slots.map(s => s.id_slot_waktu) },
                             id_jabatan_hadir: actualJabatan,
                             id_periode_hadir: actualPeriode,
@@ -1001,7 +942,7 @@ class AgendaController extends BaseController {
                 for (const slot of slots) {
                     const existingSlot = await SlotAgendaPimpinan.findOne({
                         where: {
-                            tanggal: agenda.tanggal_kegiatan,
+                            tanggal: agendaPimpinan.agenda.tanggal_kegiatan,
                             id_slot_waktu: slot.id_slot_waktu,
                             id_jabatan_diusulkan: id_jabatan,
                             id_periode_diusulkan: id_periode,
@@ -1012,7 +953,7 @@ class AgendaController extends BaseController {
 
                     if (!existingSlot) {
                         await SlotAgendaPimpinan.create({
-                            tanggal: agenda.tanggal_kegiatan,
+                            tanggal: agendaPimpinan.agenda.tanggal_kegiatan,
                             id_slot_waktu: slot.id_slot_waktu,
                             id_jabatan_hadir: actualJabatan,
                             id_periode_hadir: actualPeriode,
@@ -1155,6 +1096,85 @@ class AgendaController extends BaseController {
         } catch (error) {
             if (transaction) await transaction.rollback();
             return this.sendError(res, error, 'Gagal memperbarui status kehadiran');
+        }
+    }
+
+    async cancelAgenda(req, res) {
+        const transaction = await sequelize.transaction();
+        try {
+            const { id_agenda } = req.params;
+            const id_user_pemohon = req.user.id_user;
+
+            const agenda = await Agenda.findByPk(id_agenda, {
+                include: [{
+                    model: StatusAgenda,
+                    as: 'statusAgendas',
+                    order: [['createdAt', 'DESC']],
+                    limit: 1
+                }],
+                transaction
+            });
+
+            if (!agenda) {
+                await transaction.rollback();
+                return this.sendResponse(res, 404, false, 'Agenda tidak ditemukan');
+            }
+
+            if (agenda.id_user_pemohon !== id_user_pemohon) {
+                await transaction.rollback();
+                return this.sendResponse(res, 403, false, 'Anda tidak memiliki akses untuk membatalkan agenda ini');
+            }
+
+            const latestStatus = agenda.statusAgendas?.[0]?.status_agenda;
+            if (!['pending', 'revision'].includes(latestStatus)) {
+                await transaction.rollback();
+                return this.sendResponse(res, 400, false, 'Agenda hanya bisa dibatalkan jika status masih pending atau revisi');
+            }
+
+            const id_status_agenda = await this.generateStatusAgendaId(transaction);
+            await StatusAgenda.create({
+                id_status_agenda,
+                id_agenda,
+                id_user_sespri: req.user.id_user,
+                status_agenda: 'canceled',
+                tanggal_status: new Date(),
+                catatan: 'Dibatalkan oleh pemohon'
+            }, { transaction });
+
+            // Touch Agenda record
+            await agenda.update({ updatedAt: new Date() }, { transaction });
+
+            // Handle Google Calendar Deletion if agenda is canceled
+            try {
+                const agendaPimpinans = await AgendaPimpinan.findAll({
+                    where: { id_agenda, google_event_id: { [Op.ne]: null } },
+                    include: [
+                        { 
+                            model: PeriodeJabatan, 
+                            as: 'periodeJabatan', 
+                            include: [{ model: Pimpinan, as: 'pimpinan' }] 
+                        }
+                    ],
+                    transaction
+                });
+
+                for (const ap of agendaPimpinans) {
+                    const pimpinan = ap.periodeJabatan?.pimpinan;
+                    if (pimpinan && pimpinan.is_calendar_synced) {
+                        await googleCalendarHelper.deleteEvent(pimpinan, ap.google_event_id);
+                        await ap.update({ google_event_id: null }, { transaction });
+                    }
+                }
+            } catch (syncError) {
+                console.error('Agenda Cancellation Sync Failed:', syncError);
+            }
+
+            await transaction.commit();
+
+            return this.sendResponse(res, 201, true, 'Agenda berhasil dibatalkan', { id_agenda, status: 'canceled' });
+        } catch (error) {
+            await transaction.rollback();
+            return this.sendError(res, error, 'Gagal membatalkan agenda');
         }
     }
 

@@ -36,16 +36,8 @@ module.exports = {
         type: Sequelize.TEXT,
         allowNull: true
       },
-      surat_disposisi: {
-        type: Sequelize.STRING,
-        allowNull: true
-      },
       google_event_id: {
         type: Sequelize.STRING(100),
-        allowNull: true
-      },
-      tanda_tangan: {
-        type: Sequelize.STRING,
         allowNull: true
       },
       createdAt: {

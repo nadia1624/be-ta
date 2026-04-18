@@ -55,15 +55,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: true
     },
-    surat_disposisi: {
-      type: DataTypes.STRING,
-      allowNull: true
-    },
     google_event_id: {
-      type: DataTypes.STRING,
-      allowNull: true
-    },
-    tanda_tangan: {
       type: DataTypes.STRING,
       allowNull: true
     }

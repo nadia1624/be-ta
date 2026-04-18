@@ -25,6 +25,7 @@ router.post('/', authenticateToken, upload.single('surat_permohonan'), agendaCon
 router.put('/:id_agenda', authenticateToken, upload.single('surat_permohonan'), agendaController.updateAgenda);
 router.get('/my', authenticateToken, agendaController.getMyAgendas);
 router.get('/slots', authenticateToken, agendaController.getSlots);
+router.post('/:id_agenda/cancel', authenticateToken, agendaController.cancelAgenda);
 
 // Sespri verification routes
 router.get('/all', authenticateToken, authorizeRoles('Sespri'), agendaController.getAllAgendas);
