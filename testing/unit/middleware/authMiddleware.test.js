@@ -2,7 +2,6 @@ const jwt = require('jsonwebtoken');
 const { authenticateToken, authorizeRoles } = require('../../../middleware/authMiddleware');
 const { sendResponse } = require('../../../helpers/response');
 
-// Mock external dependencies
 jest.mock('jsonwebtoken');
 jest.mock('../../../helpers/response');
 

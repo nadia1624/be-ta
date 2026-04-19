@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const BaseController = require('./BaseController');
-const { Penugasan, SlotAgendaStaff, SlotAgendaPimpinan, AgendaPimpinan, User, Role, Agenda, StatusAgenda, SlotWaktu, PeriodeJabatan, Pimpinan, Periode, JabatanPimpinan, LaporanKegiatan, DraftBerita, DokumentasiBerita, RevisiDraftBerita, sequelize } = require('../models');
+const { Penugasan, SlotAgendaStaff, SlotAgendaPimpinan, AgendaPimpinan, User, Role, Agenda, StatusAgenda, SlotWaktu, PeriodeJabatan, Pimpinan, Periode, JabatanPimpinan, LaporanKegiatan, DraftBerita, DokumentasiBerita, RevisiDraftBerita, KASKPDPendamping, KASKPD, sequelize } = require('../models');
 const { sendPushNotification } = require('../helpers/pushNotificationHelper');
 
 class PenugasanController extends BaseController {
@@ -20,6 +20,28 @@ class PenugasanController extends BaseController {
         }
         
         return `PN${nextNum.toString().padStart(3, '0')}`;
+    }
+
+    async generateStatusAgendaId(transaction = null) {
+        const lastRecord = await StatusAgenda.findOne({
+            where: {
+                id_status_agenda: {
+                    [Op.like]: 'SA%'
+                }
+            },
+            order: [['id_status_agenda', 'DESC']],
+            attributes: ['id_status_agenda'],
+            transaction,
+            lock: transaction ? transaction.LOCK.UPDATE : false
+        });
+
+        let nextNum = 1;
+        if (lastRecord) {
+            const num = parseInt(lastRecord.id_status_agenda.substring(2));
+            if (!isNaN(num)) nextNum = num + 1;
+        }
+
+        return `SA${nextNum.toString().padStart(3, '0')}`;
     }
 
     async getStaffProtokol(req, res) {
@@ -174,10 +196,12 @@ class PenugasanController extends BaseController {
             } = req.body;
 
             if (!id_agenda) {
+                await transaction.rollback();
                 return this.sendResponse(res, 400, false, 'ID Agenda harus disertakan');
             }
 
             if (!staff_ids || !Array.isArray(staff_ids) || staff_ids.length === 0) {
+                await transaction.rollback();
                 return this.sendResponse(res, 400, false, 'Staf harus dipilih');
             }
 
@@ -310,7 +334,7 @@ class PenugasanController extends BaseController {
 
             return this.sendResponse(res, 201, true, 'Penugasan berhasil dibuat', penugasan);
         } catch (error) {
-            await transaction.rollback();
+            if (transaction) await transaction.rollback();
             return this.sendError(res, error, 'Error creating assignment');
         }
     }
@@ -343,8 +367,17 @@ class PenugasanController extends BaseController {
                     {
                         model: Agenda,
                         as: 'agenda',
-                        attributes: ['id_agenda', 'nama_kegiatan', 'tanggal_kegiatan', 'waktu_mulai', 'waktu_selesai', 'lokasi_kegiatan'],
+                        attributes: ['id_agenda', 'nama_kegiatan', 'tanggal_kegiatan', 'waktu_mulai', 'waktu_selesai', 'lokasi_kegiatan', 'contact_person', 'keterangan'],
                         include: [
+                            {
+                                model: KASKPDPendamping,
+                                as: 'kaskpdPendampings',
+                                include: [{
+                                    model: KASKPD,
+                                    as: 'kaskpd',
+                                    attributes: ['id_ka_skpd', 'nama_instansi']
+                                }]
+                            },
                             {
                                 model: AgendaPimpinan,
                                 as: 'agendaPimpinans',
@@ -474,6 +507,15 @@ class PenugasanController extends BaseController {
                                         ]
                                     }
                                 ]
+                            },
+                            {
+                                model: KASKPDPendamping,
+                                as: 'kaskpdPendampings',
+                                include: [{
+                                    model: KASKPD,
+                                    as: 'kaskpd',
+                                    attributes: ['id_ka_skpd', 'nama_instansi']
+                                }]
                             }
                         ]
                     },
@@ -566,25 +608,44 @@ class PenugasanController extends BaseController {
     }
 
     async updateStatusPenugasan(req, res) {
+        const transaction = await sequelize.transaction();
         try {
             const { id } = req.params;
             const { status } = req.body;
-            const id_user_kasubag = req.user.id_user;
+            const id_user_auth = req.user.id_user;
 
             const validStatuses = ['pending', 'progress', 'selesai'];
             if (!validStatuses.includes(status)) {
+                if (transaction) await transaction.rollback();
                 return this.sendResponse(res, 400, false, `Status tidak valid. Pilihan: ${validStatuses.join(', ')}`);
             }
 
             const penugasan = await Penugasan.findOne({
-                where: { id_penugasan: id, id_user_kasubag }
+                where: { id_penugasan: id, id_user_kasubag: id_user_auth },
+                transaction
             });
 
             if (!penugasan) {
+                if (transaction) await transaction.rollback();
                 return this.sendResponse(res, 404, false, 'Penugasan tidak ditemukan atau bukan milik Anda');
             }
 
-            await penugasan.update({ status });
+            await penugasan.update({ status }, { transaction });
+
+            // If status is 'selesai', sync to StatusAgenda
+            if (status === 'selesai' && penugasan.id_agenda) {
+                const id_status_agenda = await this.generateStatusAgendaId(transaction);
+                await StatusAgenda.create({
+                    id_status_agenda,
+                    id_agenda: penugasan.id_agenda,
+                    id_user_sespri: id_user_auth, // Current actor ID
+                    status_agenda: 'completed',
+                    tanggal_status: new Date().toISOString().split('T')[0],
+                    catatan: `Agenda sudah selesai dilakukan.`
+                }, { transaction });
+            }
+
+            await transaction.commit();
 
             const statusLabel = status === 'selesai' ? 'Selesai' : status === 'progress' ? 'Berlangsung' : 'Belum Dimulai';
             return this.sendResponse(res, 200, true, `Status penugasan berhasil diperbarui menjadi ${statusLabel}`, {
@@ -592,6 +653,7 @@ class PenugasanController extends BaseController {
                 status
             });
         } catch (error) {
+            if (transaction) await transaction.rollback();
             return this.sendError(res, error, 'Error updating status penugasan');
         }
     }
@@ -604,8 +666,17 @@ class PenugasanController extends BaseController {
                     {
                         model: Agenda,
                         as: 'agenda',
-                        attributes: ['id_agenda', 'nama_kegiatan', 'tanggal_kegiatan', 'waktu_mulai', 'waktu_selesai', 'lokasi_kegiatan'],
+                        attributes: ['id_agenda', 'nama_kegiatan', 'tanggal_kegiatan', 'waktu_mulai', 'waktu_selesai', 'lokasi_kegiatan', 'contact_person', 'keterangan'],
                         include: [
+                            {
+                                model: KASKPDPendamping,
+                                as: 'kaskpdPendampings',
+                                include: [{
+                                    model: KASKPD,
+                                    as: 'kaskpd',
+                                    attributes: ['id_ka_skpd', 'nama_instansi']
+                                }]
+                            },
                             {
                                 model: AgendaPimpinan,
                                 as: 'agendaPimpinans',

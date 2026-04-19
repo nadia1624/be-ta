@@ -1,5 +1,5 @@
 const BaseController = require('./BaseController');
-const { DraftBerita, DokumentasiBerita, User, Penugasan, Agenda, AgendaPimpinan, PeriodeJabatan, Pimpinan, RevisiDraftBerita } = require('../models');
+const { DraftBerita, DokumentasiBerita, User, Penugasan, Agenda, AgendaPimpinan, PeriodeJabatan, Pimpinan, RevisiDraftBerita, sequelize } = require('../models');
 const { sendPushNotification } = require('../helpers/pushNotificationHelper');
 
 class BeritaController extends BaseController {
@@ -129,13 +129,13 @@ class BeritaController extends BaseController {
      * Submit draft berita (Staff Media)
      */
     async submitDraftBerita(req, res) {
-        const { sequelize } = require('../models');
         const transaction = await sequelize.transaction();
         try {
             const { id_penugasan, judul_berita, isi_draft } = req.body;
             const { id_user } = req.user;
 
             if (!id_penugasan || !judul_berita || !isi_draft) {
+                await transaction.rollback();
                 return this.sendResponse(res, 400, false, 'Mohon lengkapi semua field yang diperlukan');
             }
 
@@ -248,7 +248,7 @@ class BeritaController extends BaseController {
             await transaction.commit();
             return this.sendResponse(res, 201, true, 'Draft berita berhasil diserahkan', draft);
         } catch (error) {
-            await transaction.rollback();
+            if (transaction) await transaction.rollback();
             return this.sendError(res, error, 'Gagal menyerahkan draft berita');
         }
     }

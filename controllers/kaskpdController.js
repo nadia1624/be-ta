@@ -1,5 +1,5 @@
 const BaseController = require('./BaseController');
-const { KASKPD } = require('../models');
+const { KASKPD, KASKPDPendamping } = require('../models');
 
 class KASKPDController extends BaseController {
     /**
@@ -100,8 +100,15 @@ class KASKPDController extends BaseController {
                 return this.sendResponse(res, 404, false, 'KaSKPD tidak ditemukan');
             }
 
-            // Optional: Check for associations before deleting
-            // For now, simple delete
+            // Check for associations before deleting
+            const isUsed = await KASKPDPendamping.findOne({
+                where: { id_ka_skpd: id }
+            });
+
+            if (isUsed) {
+                return this.sendResponse(res, 400, false, 'Data KaSKPD tidak dapat dihapus karena sudah digunakan dalam agenda pimpinan');
+            }
+
             await data.destroy();
             return this.sendResponse(res, 200, true, 'KaSKPD berhasil dihapus');
         } catch (error) {

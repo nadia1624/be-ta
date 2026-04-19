@@ -7,18 +7,30 @@ MockModel.hasMany = jest.fn();
 MockModel.belongsToMany = jest.fn();
 MockModel.hasOne = jest.fn();
 
-// Use jest.mock at the top level of the setup file
+// Mock sequelize
 jest.mock('sequelize', () => {
   const actual = jest.requireActual('sequelize');
-  return {
-    ...actual,
-    Model: MockModel,
-    DataTypes: actual.DataTypes,
-    Sequelize: jest.fn().mockImplementation(() => ({
-      define: jest.fn().mockReturnValue(MockModel),
-      import: jest.fn()
-    }))
-  };
+  
+  // Create a mock constructor
+  const MockSequelize = jest.fn().mockImplementation(() => ({
+    define: jest.fn().mockReturnValue(global.MockModel),
+    authenticate: jest.fn().mockResolvedValue(),
+    sync: jest.fn().mockResolvedValue(),
+    transaction: jest.fn().mockImplementation(() => ({
+      commit: jest.fn().mockResolvedValue(),
+      rollback: jest.fn().mockResolvedValue(),
+      LOCK: { UPDATE: 'UPDATE' }
+    })),
+    import: jest.fn()
+  }));
+
+  // Attach properties to the constructor
+  MockSequelize.Model = global.MockModel;
+  MockSequelize.DataTypes = actual.DataTypes;
+  MockSequelize.Op = actual.Op;
+  MockSequelize.Sequelize = MockSequelize;
+
+  return MockSequelize;
 });
 
 global.MockModel = MockModel;

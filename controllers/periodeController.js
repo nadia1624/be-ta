@@ -72,21 +72,6 @@ class PeriodeController extends BaseController {
         }
     }
 
-    async deletePeriode(req, res) {
-        try {
-            const { id } = req.params;
-            const periode = await Periode.findByPk(id);
-
-            if (!periode) {
-                return this.sendResponse(res, 404, false, 'Periode tidak ditemukan');
-            }
-
-            await periode.destroy();
-            return this.sendResponse(res, 200, true, 'Periode berhasil dihapus');
-        } catch (error) {
-            return this.sendError(res, error, 'Error deleting periode');
-        }
-    }
 }
 
 module.exports = new PeriodeController();

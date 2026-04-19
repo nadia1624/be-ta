@@ -18,8 +18,15 @@ jest.mock('../../../models', () => ({
 }));
 
 describe('Reminder Scheduler', () => {
+  let consoleSpy;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleSpy.mockRestore();
   });
 
   test('initReminders should schedule a cron job', () => {
@@ -64,5 +71,49 @@ describe('Reminder Scheduler', () => {
     expect(sendPushNotification).toHaveBeenCalledWith('U01', expect.objectContaining({
       title: 'Pengingat Agenda'
     }));
+  });
+
+  test('cron job should not send notification if userAjudan is missing', async () => {
+    const mockNow = { format: jest.fn().mockReturnValue('2023-10-10'), add: jest.fn().mockReturnThis() };
+    moment.mockReturnValue(mockNow);
+    initReminders();
+    const cronJobAction = cron.schedule.mock.calls[0][1];
+
+    Agenda.findAll.mockResolvedValue([{ 
+      agendaPimpinans: [{ id_jabatan: 'J1', id_periode: 'P1' }] 
+    }]);
+    PimpinanAjudan.findAll.mockResolvedValue([{ id_user_ajudan: 'U1', userAjudan: null }]);
+
+    await cronJobAction();
+
+    expect(sendPushNotification).not.toHaveBeenCalled();
+  });
+
+  test('cron job should handle database errors (catch block)', async () => {
+    const mockNow = { format: jest.fn().mockReturnValue('2023-10-10'), add: jest.fn().mockReturnThis() };
+    moment.mockReturnValue(mockNow);
+    initReminders();
+    const cronJobAction = cron.schedule.mock.calls[0][1];
+
+    const error = new Error('DB Fail');
+    Agenda.findAll.mockRejectedValue(error);
+
+    await cronJobAction();
+
+    expect(consoleSpy).toHaveBeenCalledWith('Error in reminder cron job:', error);
+  });
+
+  test('cron job should do nothing if no upcoming agendas found', async () => {
+    const mockNow = { format: jest.fn().mockReturnValue('2023-10-10'), add: jest.fn().mockReturnThis() };
+    moment.mockReturnValue(mockNow);
+    initReminders();
+    const cronJobAction = cron.schedule.mock.calls[0][1];
+
+    Agenda.findAll.mockResolvedValue([]);
+
+    await cronJobAction();
+
+    expect(PimpinanAjudan.findAll).not.toHaveBeenCalled();
+    expect(sendPushNotification).not.toHaveBeenCalled();
   });
 });

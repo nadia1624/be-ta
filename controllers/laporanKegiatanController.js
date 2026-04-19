@@ -34,14 +34,14 @@ class LaporanKegiatanController extends BaseController {
             const isStaff = nama_role === 'Staff Protokol' || nama_role === 'Staf Protokol';
 
             if (!isStaff) {
-                await transaction.rollback();
+                if (transaction) await transaction.rollback();
                 return this.sendResponse(res, 403, false, 'Hanya Staff Protokol yang dapat menambahkan laporan');
             }
 
             const { id_penugasan, deskripsi_laporan, catatan_laporan } = req.body;
 
             if (!id_penugasan || !deskripsi_laporan) {
-                await transaction.rollback();
+                if (transaction) await transaction.rollback();
                 return this.sendResponse(res, 400, false, 'Penugasan dan deskripsi laporan wajib diisi');
             }
 
@@ -65,7 +65,7 @@ class LaporanKegiatanController extends BaseController {
             });
 
             if (!penugasan) {
-                await transaction.rollback();
+                if (transaction) await transaction.rollback();
                 return this.sendResponse(res, 404, false, 'Penugasan tidak ditemukan atau Anda tidak memiliki akses');
             }
 
@@ -74,7 +74,7 @@ class LaporanKegiatanController extends BaseController {
             const agendaDate = penugasan.agenda?.tanggal_kegiatan;
 
             if (agendaDate && today < agendaDate) {
-                await transaction.rollback();
+                if (transaction) await transaction.rollback();
                 return this.sendResponse(res, 403, false, `Laporan hanya dapat ditambahkan pada hari H (${agendaDate}) atau setelah kegiatan berlangsung`);
             }
 
@@ -94,11 +94,16 @@ class LaporanKegiatanController extends BaseController {
                 dokumentasi_laporan
             }, { transaction });
 
+            // Update penugasan status to 'progress' if it's currently 'pending'
+            if (penugasan.status === 'pending' || !penugasan.status) {
+                await penugasan.update({ status: 'progress' }, { transaction });
+            }
+
             await transaction.commit();
 
             return this.sendResponse(res, 201, true, 'Laporan berhasil ditambahkan', laporan);
         } catch (error) {
-            await transaction.rollback();
+            if (transaction) await transaction.rollback();
             return this.sendError(res, error, 'Gagal menambahkan laporan');
         }
     }

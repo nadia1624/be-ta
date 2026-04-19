@@ -98,23 +98,6 @@ class PimpinanController extends BaseController {
         }
     }
 
-    async deletePimpinan(req, res) {
-        try {
-            const { id_jabatan, id_periode } = req.body; 
-            
-            await PeriodeJabatan.destroy({
-                where: {
-                    id_jabatan: id_jabatan,
-                    id_periode: id_periode
-                }
-            });
-            
-            return this.sendResponse(res, 200, true, 'Data berhasil dihapus dari periode ini');
-        } catch (error) {
-            return this.sendError(res, error, 'Error deleting pimpinan assignment');
-        }
-    }
-
     async getAllJabatan(req, res) {
         try {
             const jabatan = await JabatanPimpinan.findAll();

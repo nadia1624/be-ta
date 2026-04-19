@@ -134,8 +134,9 @@ class AgendaController extends BaseController {
 
             await transaction.commit();
 
-            // Notify all Sespri users about the new agenda
+            // Notify relevant parties about the new agenda
             if (!isSespri) {
+                // Notify all Sespri users about permohonan from Pemohon
                 const sespriUsers = await User.findAll({
                     include: [{
                         model: Role,
@@ -148,13 +149,48 @@ class AgendaController extends BaseController {
                     title: 'Permohonan Agenda Baru',
                     body: `Agenda "${newAgenda.nama_kegiatan}" telah diajukan oleh ${req.user.nama}.`,
                     data: {
-                        url: '/sespri/agenda-pimpinan', // Adjust as needed
+                        url: '/sespri/verifikasi-permohonan',
                         id_agenda: newAgenda.id_agenda
                     }
                 };
 
                 for (const user of sespriUsers) {
                     await sendPushNotification(user.id_user, notificationPayload);
+                }
+            } else {
+                // Notify Ajudans when Sespri creates agenda directly
+                try {
+                    if (parsedPimpinan && Array.isArray(parsedPimpinan)) {
+                        const pimpinanCriteria = parsedPimpinan.map(p => ({
+                            id_jabatan: p.id_jabatan,
+                            id_periode: p.id_periode
+                        }));
+
+                        const pimpinanAjudans = await PimpinanAjudan.findAll({
+                            where: {
+                                [Op.or]: pimpinanCriteria,
+                                status_aktif: 'aktif'
+                            }
+                        });
+
+                        const uniqueAjudanIds = [...new Set(pimpinanAjudans.map(pa => pa.id_user_ajudan))];
+                        
+                        const ajudanNotificationPayload = {
+                            title: 'Agenda Baru ditambahkan Sespri',
+                            body: `Agenda "${newAgenda.nama_kegiatan}" memerlukan konfirmasi kehadiran pimpinan.`,
+                            data: {
+                                url: '/ajudan/konfirmasi-agenda',
+                                id_agenda: newAgenda.id_agenda,
+                                status: 'approved_sespri'
+                            }
+                        };
+
+                        for (const id_user_ajudan of uniqueAjudanIds) {
+                            await sendPushNotification(id_user_ajudan, ajudanNotificationPayload);
+                        }
+                    }
+                } catch (notifError) {
+                    console.error('Error sending direct agenda notifications to Ajudan:', notifError);
                 }
             }
 
@@ -331,7 +367,7 @@ class AgendaController extends BaseController {
                 id_user_sespri: req.user.id_user,
                 status_agenda: status,
                 tanggal_status: new Date(),
-                catatan: catatan || null
+                catatan: catatan || `Status diperbarui oleh Sespri via verifikasi: ${status}`
             }, { transaction });
 
             // Touch Agenda record to update its updatedAt timestamp for activity-based sorting
@@ -828,6 +864,8 @@ class AgendaController extends BaseController {
                 return this.sendResponse(res, 404, false, 'Data agenda pimpinan tidak ditemukan');
             }
 
+            const agenda = agendaPimpinan.agenda;
+
             let finalNamaPerwakilan = nama_perwakilan;
             let finalJabatanPerwakilan = '-';
             let originalPimpinanObj = null;
@@ -1016,7 +1054,7 @@ class AgendaController extends BaseController {
                     id_user_sespri: req.user.id_user,
                     status_agenda: newOverallStatus,
                     tanggal_status: new Date(),
-                    catatan: `Status diperbarui oleh Ajudan/Sespri via kehadiran: ${status_kehadiran}`
+                    catatan: `Status diperbarui oleh ${nama_role} via kehadiran: ${status_kehadiran}`
                 }, { transaction });
 
                 // Touch Agenda record to update its updatedAt timestamp for activity-based sorting

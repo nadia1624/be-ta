@@ -1,6 +1,5 @@
 class BaseController {
     constructor() {
-        // Bind methods to 'this' to avoid context issues when used in routes
         const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(this));
         methods.forEach(method => {
             if (method !== 'constructor' && typeof this[method] === 'function') {

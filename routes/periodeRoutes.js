@@ -6,6 +6,5 @@ const { authenticateToken, authorizeRoles } = require('../middleware/authMiddlew
 router.post('/', authenticateToken, authorizeRoles('Admin'), periodeController.createPeriode);
 router.get('/', authenticateToken, periodeController.getAllPeriode);
 router.put('/:id', authenticateToken, authorizeRoles('Admin'), periodeController.updatePeriode);
-router.delete('/:id', authenticateToken, authorizeRoles('Admin'), periodeController.deletePeriode);
 
 module.exports = router;

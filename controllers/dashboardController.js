@@ -187,6 +187,7 @@ class DashboardController extends BaseController {
             return this.sendError(res, error, 'Gagal mengambil data dashboard admin');
         }
     }
+
     async getSespriStats(req, res) {
         try {
             const today = new Date().toISOString().split('T')[0];
@@ -401,6 +402,7 @@ class DashboardController extends BaseController {
             return this.sendError(res, error, 'Gagal mengambil data dashboard sespri');
     }
     }
+
     async getKasubagMediaStats(req, res) {
         try {
             const today = new Date().toISOString().split('T')[0];
@@ -917,7 +919,7 @@ class DashboardController extends BaseController {
                     id: p.id_penugasan,
                     judul_kegiatan: p.agenda?.nama_kegiatan || '-',
                     pimpinan: p.agenda?.agendaPimpinans?.map(ap => ap.periodeJabatan?.pimpinan?.nama_pimpinan).join(', ') || '-',
-                    waktu: `${p.agenda?.waktu_mulai.slice(0, 5)} - ${p.agenda?.waktu_selesai.slice(0, 5)}`,
+                    waktu: `${p.agenda?.waktu_mulai?.slice(0, 5) || '--:--'} - ${p.agenda?.waktu_selesai?.slice(0, 5) || '--:--'}`,
                     tempat: p.agenda?.lokasi_kegiatan || '-',
                     status_draft: 'Check detail' // Logic for draft status per assignment can be complex, will simplify for now
                 })),
@@ -948,7 +950,7 @@ class DashboardController extends BaseController {
                 attributes: [[sequelize.fn('DISTINCT', sequelize.col('id_penugasan')), 'id_penugasan']],
                 raw: true
             });
-            const penugasanIds = assignedPenugasanIds.map(p => p.id_penugasan).filter(id => id);
+            const penugasanIds = [...new Set(assignedPenugasanIds.map(p => p.id_penugasan).filter(id => id))];
 
             const totalTasks = penugasanIds.length;
             const onProgress = await Penugasan.count({
@@ -1072,7 +1074,7 @@ class DashboardController extends BaseController {
                     judul: p.agenda?.nama_kegiatan || '-',
                     penugasan_dari: p.kasubag?.nama || 'Kasubag',
                     tanggal: p.agenda?.tanggal_kegiatan,
-                    waktu: `${p.agenda?.waktu_mulai?.slice(0, 5)} - ${p.agenda?.waktu_selesai?.slice(0, 5)}`,
+                    waktu: `${p.agenda?.waktu_mulai?.slice(0, 5) || '--:--'} - ${p.agenda?.waktu_selesai?.slice(0, 5) || '--:--'}`,
                     lokasi: p.agenda?.lokasi_kegiatan || '-',
                     status: p.status === 'pending' ? 'Belum Dimulai' : p.status === 'progress' ? 'Berlangsung' : 'Selesai',
                     instruksi: p.deskripsi_penugasan || '-',
