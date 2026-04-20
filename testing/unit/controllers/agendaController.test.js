@@ -732,6 +732,26 @@ describe('AgendaController Unit Tests', () => {
                 await AgendaController.updateLeaderAttendance(req, res);
                 expect(res.status).toHaveBeenCalledWith(404);
             });
+
+            test('2. Return 400 jika perwakilan sudah masuk dalam daftar undangan', async () => {
+                PimpinanAjudan.findOne.mockResolvedValue({});
+                const ap = { id_agenda: 'AG1' };
+                AgendaPimpinan.findOne
+                    .mockResolvedValueOnce(ap) // First call: find the record to update
+                    .mockResolvedValueOnce({ id_agenda: 'AG1', id_jabatan: 'J2' }); // Second call: validation check
+
+                PeriodeJabatan.findOne.mockResolvedValue({ pimpinan: { nama_pimpinan: 'Pimpinan B' } });
+                
+                const req = mockReq({ status_kehadiran: 'diwakilkan', id_jabatan_perwakilan: 'J2' }, USER, PARAMS);
+                const res = mockRes();
+                await AgendaController.updateLeaderAttendance(req, res);
+
+                expect(res.status).toHaveBeenCalledWith(400);
+                expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ 
+                    message: expect.stringContaining('sudah masuk dalam daftar undangan agenda ini') 
+                }));
+                expect(mockTx.rollback).toHaveBeenCalled();
+            });
         });
 
         describe('10.3 Conflict Test', () => {
@@ -860,7 +880,9 @@ describe('AgendaController Unit Tests', () => {
             test('5. Return 200 jika status diwakilkan (fetch repPimpinan)', async () => {
                 PimpinanAjudan.findOne.mockResolvedValue({});
                 const ap = { agenda: {}, update: jest.fn() };
-                AgendaPimpinan.findOne.mockResolvedValue(ap);
+                AgendaPimpinan.findOne
+                    .mockResolvedValueOnce(ap) // First call: existing record
+                    .mockResolvedValueOnce(null); // Second call: validation check (not invited)
                 PeriodeJabatan.findOne.mockResolvedValue({ pimpinan: { nama_pimpinan: 'Rep 1' } }); // for repPimpinan
                 SlotWaktu.findAll.mockResolvedValue([]);
                 StatusAgenda.findOne.mockResolvedValue(null);
@@ -900,9 +922,11 @@ describe('AgendaController Unit Tests', () => {
                 };
                 AgendaPimpinan.findOne.mockResolvedValue(ap);
                 PeriodeJabatan.findOne.mockResolvedValue({ id_pimpinan: 'P1', pimpinan: { id_pimpinan: 'P1' } });
+                
+                // Now called twice: one for pimpinanToSync, one for originalPimpinan logic
                 Pimpinan.findByPk.mockResolvedValue({ id_pimpinan: 'P1', is_calendar_synced: true });
+                
                 SlotWaktu.findAll.mockResolvedValue([]);
-                SlotAgendaPimpinan.count.mockResolvedValue(1);
                 User.findAll.mockResolvedValue([]);
                 
                 googleCalendarHelper.syncEvent.mockResolvedValue('NEW');
@@ -916,19 +940,74 @@ describe('AgendaController Unit Tests', () => {
             test('9. Log error if scheduled sync fails', async () => {
                 PimpinanAjudan.findOne.mockResolvedValue({});
                 AgendaPimpinan.findOne.mockResolvedValue({ agenda: {}, update: jest.fn() });
-                PeriodeJabatan.findOne.mockResolvedValue({ pimpinan: {} });
-                Pimpinan.findByPk.mockResolvedValue({ is_calendar_synced: true });
+                PeriodeJabatan.findOne.mockResolvedValue({ id_pimpinan: 'P1', pimpinan: { id_pimpinan: 'P1' } });
+                Pimpinan.findByPk.mockResolvedValue({ id_pimpinan: 'P1', is_calendar_synced: true });
                 googleCalendarHelper.syncEvent.mockRejectedValue(new Error('Sync Fail'));
                 SlotWaktu.findAll.mockResolvedValue([]);
-                SlotAgendaPimpinan.count.mockResolvedValue(1);
                 User.findAll.mockResolvedValue([]);
                 
                 const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
                 const req = mockReq({ status_kehadiran: 'hadir', id_agenda: 'AG1', id_jabatan: 'J1', id_periode: 'P1' }, { id_user: 'AJU1', nama_role: 'Ajudan' }, { id_agenda: 'AG1', id_jabatan: 'J1', id_periode: 'P1' });
                 const res = mockRes();
                 await AgendaController.updateLeaderAttendance(req, res);
-                expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Scheduled Google Sync Failed:'), expect.any(Error));
+                expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('SIMAP Google Calendar Sync Error'), expect.any(Error));
                 consoleSpy.mockRestore();
+            });
+
+            test('10. Sync to representative pimpinan if delegated internally', async () => {
+                PimpinanAjudan.findOne.mockResolvedValue({});
+                
+                const ap = { 
+                    id_pimpinan: 'ORIG_P1', 
+                    google_event_id: 'OLD_EV', 
+                    update: jest.fn(),
+                    agenda: { id_agenda: 'AG1', nama_kegiatan: 'Test' }
+                };
+                
+                AgendaPimpinan.findOne
+                    .mockResolvedValueOnce(ap) // original fetch
+                    .mockResolvedValueOnce(null); // validation check
+                
+                // Mock PeriodeJabatan.findOne for all 3 calls
+                PeriodeJabatan.findOne
+                    .mockResolvedValueOnce({ id_pimpinan: 'ORIG_P1', pimpinan: { nama_pimpinan: 'Orig' } }) // line 881
+                    .mockResolvedValueOnce({ pimpinan: { nama_pimpinan: 'Rep' } }) // line 892
+                    .mockResolvedValueOnce({ id_pimpinan: 'REP_P1' }); // line 1140
+                
+                // Pimpinan.findByPk calls:
+                // 1. pimpinanToSync (Representative) at line 1145
+                // 2. originalPimpinan (Original) at line 1153
+                Pimpinan.findByPk
+                    .mockResolvedValueOnce({ id_pimpinan: 'REP_P1', is_calendar_synced: true })
+                    .mockResolvedValueOnce({ id_pimpinan: 'ORIG_P1', is_calendar_synced: true });
+                
+                SlotWaktu.findAll.mockResolvedValue([]);
+                User.findAll.mockResolvedValue([]);
+                googleCalendarHelper.deleteEvent.mockResolvedValue();
+                googleCalendarHelper.syncEvent.mockResolvedValue('REP_EV_ID');
+
+                const req = mockReq({ 
+                    status_kehadiran: 'diwakilkan', 
+                    id_jabatan_perwakilan: 'J_REP', 
+                    id_periode_perwakilan: 'P_REP' 
+                }, USER, PARAMS);
+                const res = mockRes();
+                
+                await AgendaController.updateLeaderAttendance(req, res);
+
+                // Should delete from original
+                expect(googleCalendarHelper.deleteEvent).toHaveBeenCalledWith(
+                    expect.objectContaining({ id_pimpinan: 'ORIG_P1' }),
+                    'OLD_EV'
+                );
+                
+                // Should sync to representative
+                expect(googleCalendarHelper.syncEvent).toHaveBeenCalledWith(
+                    expect.objectContaining({ id_pimpinan: 'REP_P1' }),
+                    expect.anything()
+                );
+                
+                expect(ap.update).toHaveBeenCalledWith(expect.objectContaining({ google_event_id: 'REP_EV_ID' }));
             });
         });
 

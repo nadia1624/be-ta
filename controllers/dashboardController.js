@@ -1,185 +1,22 @@
 const BaseController = require('./BaseController');
-const { User, Agenda, StatusAgenda, Penugasan, LaporanKegiatan, AgendaPimpinan, SlotAgendaPimpinan, SlotWaktu, PeriodeJabatan, JabatanPimpinan, Pimpinan, DraftBerita, SlotAgendaStaff, sequelize } = require('../models');
+const { User, Agenda, StatusAgenda, Penugasan, LaporanKegiatan, AgendaPimpinan, SlotAgendaPimpinan, SlotWaktu, PeriodeJabatan, JabatanPimpinan, Pimpinan, DraftBerita, SlotAgendaStaff, KASKPD, Periode, sequelize } = require('../models');
 const { Op } = require('sequelize');
 
 class DashboardController extends BaseController {
     async getAdminStats(req, res) {
         try {
-            // 1. Total counts
             const totalUsers = await User.count();
-            const totalAgenda = await Agenda.count();
-
-            // 2. Pending Requests (latest status is 'pending')
-            // Using a subquery approach for accurate latest status
-            const pendingRequestsCount = await StatusAgenda.count({
-                where: {
-                    status_agenda: 'pending',
-                    id_status_agenda: {
-                        [Op.in]: sequelize.literal(`(
-                            SELECT id_status_agenda 
-                            FROM "StatusAgenda" AS sa2 
-                            WHERE sa2.id_agenda = "StatusAgenda".id_agenda 
-                            ORDER BY sa2."createdAt" DESC 
-                            LIMIT 1
-                        )`)
-                    }
-                }
-            });
-
-            // 3. Confirmed Agendas (latest status is 'approved_ajudan', 'delegated', or 'completed')
-            const confirmedAgendasCount = await StatusAgenda.count({
-                where: {
-                    status_agenda: {
-                        [Op.in]: ['approved_ajudan', 'delegated', 'completed']
-                    },
-                    id_status_agenda: {
-                        [Op.in]: sequelize.literal(`(
-                            SELECT id_status_agenda 
-                            FROM "StatusAgenda" AS sa2 
-                            WHERE sa2.id_agenda = "StatusAgenda".id_agenda 
-                            ORDER BY sa2."createdAt" DESC 
-                            LIMIT 1
-                        )`)
-                    }
-                }
-            });
-
-            // 4. Recent Requests (limit 5)
-            const recentRequests = await Agenda.findAll({
-                limit: 5,
-                order: [['updatedAt', 'DESC']],
-                include: [
-                    {
-                        model: User,
-                        as: 'pemohon',
-                        attributes: ['nama']
-                    },
-                    {
-                        model: StatusAgenda,
-                        as: 'statusAgendas',
-                        required: false,
-                        separate: true,
-                        limit: 1,
-                        order: [['createdAt', 'DESC']]
-                    }
-                ]
-            });
-
-            // 5. Upcoming Agendas (limit 5)
-            // Filter agendas with confirmed status that happen today or in the future
-            const upcomingAgendaIds = await Agenda.findAll({
-                attributes: ['id_agenda'],
-                where: {
-                    tanggal_kegiatan: {
-                        [Op.gte]: new Date().toISOString().split('T')[0]
-                    },
-                    id_agenda: {
-                        [Op.in]: sequelize.literal(`(
-                            SELECT sa1.id_agenda
-                            FROM "StatusAgenda" sa1
-                            WHERE sa1.id_status_agenda = (
-                                SELECT sa2.id_status_agenda
-                                FROM "StatusAgenda" sa2
-                                WHERE sa2.id_agenda = sa1.id_agenda
-                                ORDER BY sa2."createdAt" DESC
-                                LIMIT 1
-                            )
-                            AND sa1.status_agenda IN ('approved_ajudan', 'delegated', 'completed')
-                        )`)
-                    }
-                },
-                limit: 5,
-                order: [['updatedAt', 'DESC']]
-            });
-
-            const upcomingAgenda = await Agenda.findAll({
-                where: {
-                    id_agenda: {
-                        [Op.in]: upcomingAgendaIds.map(a => a.id_agenda)
-                    }
-                },
-                order: [['updatedAt', 'DESC']],
-                include: [
-                    {
-                        model: StatusAgenda,
-                        as: 'statusAgendas',
-                        required: true,
-                        separate: true,
-                        limit: 1,
-                        order: [['createdAt', 'DESC']]
-                    },
-                    {
-                        model: AgendaPimpinan,
-                        as: 'agendaPimpinans',
-                        include: [
-                            {
-                                model: PeriodeJabatan,
-                                as: 'periodeJabatan',
-                                on: {
-                                    id_jabatan: { [Op.col]: 'agendaPimpinans.id_jabatan' },
-                                    id_periode: { [Op.col]: 'agendaPimpinans.id_periode' }
-                                },
-                                include: [
-                                    { model: JabatanPimpinan, as: 'jabatan' },
-                                    { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        model: SlotAgendaPimpinan,
-                        as: 'slotAgendaPimpinans',
-                        required: false,
-                        include: [
-                            { model: SlotWaktu, as: 'slotWaktu' },
-                            {
-                                model: PeriodeJabatan,
-                                as: 'periodeJabatanDiusulkan',
-                                on: {
-                                    id_jabatan: { [Op.col]: 'slotAgendaPimpinans.id_jabatan_diusulkan' },
-                                    id_periode: { [Op.col]: 'slotAgendaPimpinans.id_periode_diusulkan' }
-                                },
-                                include: [
-                                    { model: JabatanPimpinan, as: 'jabatan' },
-                                    { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
-                                ]
-                            },
-                            {
-                                model: PeriodeJabatan,
-                                as: 'periodeJabatanHadir',
-                                include: [
-                                    { model: JabatanPimpinan, as: 'jabatan' },
-                                    { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            });
+            const totalPimpinan = await Pimpinan.count();
+            const totalKaskpd = await KASKPD.count();
+            const totalPeriode = await Periode.count();
 
             const dashboardData = {
                 stats: {
                     totalUsers,
-                    totalAgenda,
-                    pendingRequests: pendingRequestsCount,
-                    confirmedAgendas: confirmedAgendasCount
-                },
-                recentRequests: recentRequests.map(r => ({
-                    nomor_surat: r.nomor_surat,
-                    pemohon: r.pemohon?.nama || 'Unknown',
-                    perihal: r.perihal,
-                    tanggal_surat: r.tanggal_surat,
-                    status: r.statusAgendas?.[0]?.status_agenda || 'pending'
-                })),
-                upcomingAgenda: upcomingAgenda.map(a => ({
-                    nama_kegiatan: a.nama_kegiatan,
-                    tanggal_kegiatan: a.tanggal_kegiatan,
-                    waktu_mulai: a.waktu_mulai,
-                    lokasi_kegiatan: a.lokasi_kegiatan,
-                    nama_pimpinan: a.agendaPimpinans?.map(ap => ap.periodeJabatan?.pimpinan?.nama_pimpinan).join(', ') || '-',
-                    status: a.statusAgendas?.[0]?.status_agenda === 'approved_ajudan' ? 'Terkonfirmasi' : 
-                            a.statusAgendas?.[0]?.status_agenda === 'delegated' ? 'Diwakilkan' : 'Selesai'
-                }))
+                    totalPimpinan,
+                    totalKaskpd,
+                    totalPeriode,
+                }
             };
 
             return this.sendResponse(res, 200, true, 'Data dashboard admin berhasil diambil', dashboardData);

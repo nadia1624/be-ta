@@ -35,6 +35,18 @@ const mockLaporanKegiatan = {
     findAll: jest.fn(),
 };
 
+const mockKASKPD = {
+    count: jest.fn(),
+};
+
+const mockPeriode = {
+    count: jest.fn(),
+};
+
+const mockPimpinan = {
+    count: jest.fn(),
+};
+
 const mockSequelize = {
     literal: jest.fn(val => val),
     fn: jest.fn((f, c) => `${f}(${c})`),
@@ -55,7 +67,9 @@ jest.mock('../../../models', () => ({
     SlotWaktu: {},
     PeriodeJabatan: {},
     JabatanPimpinan: {},
-    Pimpinan: {},
+    Pimpinan: mockPimpinan,
+    KASKPD: mockKASKPD,
+    Periode: mockPeriode,
     sequelize: mockSequelize,
 }));
 
@@ -109,70 +123,29 @@ describe('DashboardController Unit Tests', () => {
     describe('1. getAdminStats()', () => {
         test('Success: Stats counts mapping', async () => {
             mockUser.count.mockResolvedValue(10);
-            mockAgenda.count.mockResolvedValue(20);
-            mockStatusAgenda.count.mockResolvedValueOnce(5).mockResolvedValueOnce(8);
-            mockAgenda.findAll.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+            mockPimpinan.count.mockResolvedValue(5);
+            mockKASKPD.count.mockResolvedValue(15);
+            mockPeriode.count.mockResolvedValue(2);
 
             await DashboardController.getAdminStats(req, res);
 
             expect(responseSpy).toHaveBeenCalledWith(res, 200, true, expect.any(String), expect.objectContaining({
-                stats: { totalUsers: 10, totalAgenda: 20, pendingRequests: 5, confirmedAgendas: 8 }
+                stats: { totalUsers: 10, totalPimpinan: 5, totalKaskpd: 15, totalPeriode: 2 }
             }));
         });
 
-        test('Success: Recent Requests mapping with fallbacks', async () => {
-            const mockRecent = [
-                { nomor_surat: 'S1', perihal: 'P1', tanggal_surat: 'D1', pemohon: { nama: 'User A' }, statusAgendas: [{ status_agenda: 'confirmed' }] },
-                { nomor_surat: 'S2', perihal: 'P2', tanggal_surat: 'D2', pemohon: null, statusAgendas: [] }
-            ];
+        test('Success: Stats only response (lists removed)', async () => {
             mockUser.count.mockResolvedValue(0);
-            mockAgenda.count.mockResolvedValue(0);
-            mockStatusAgenda.count.mockResolvedValue(0);
-            mockAgenda.findAll.mockResolvedValueOnce(mockRecent).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+            mockPimpinan.count.mockResolvedValue(0);
+            mockKASKPD.count.mockResolvedValue(0);
+            mockPeriode.count.mockResolvedValue(0);
 
             await DashboardController.getAdminStats(req, res);
 
             const result = responseSpy.mock.calls[0][4];
-            expect(result.recentRequests[0].pemohon).toBe('User A');
-            expect(result.recentRequests[0].status).toBe('confirmed');
-            expect(result.recentRequests[1].pemohon).toBe('Unknown');
-            expect(result.recentRequests[1].status).toBe('pending');
-        });
-
-        test('Success: Upcoming Agenda mapping (Labels & Pimpinan join)', async () => {
-            mockUser.count.mockResolvedValue(0);
-            mockAgenda.count.mockResolvedValue(0);
-            mockStatusAgenda.count.mockResolvedValue(0);
-            mockAgenda.findAll.mockResolvedValueOnce([]); // recent
-            mockAgenda.findAll.mockResolvedValueOnce([{ id_agenda: 'A1' }, { id_agenda: 'A2' }, { id_agenda: 'A3' }]); // ids
-            
-            const mockDetails = [
-                { 
-                    nama_kegiatan: 'K1', statusAgendas: [{ status_agenda: 'approved_ajudan' }],
-                    agendaPimpinans: [{ periodeJabatan: { pimpinan: { nama_pimpinan: 'Pim A' } } }]
-                },
-                { 
-                    nama_kegiatan: 'K2', statusAgendas: [{ status_agenda: 'delegated' }],
-                    agendaPimpinans: [{ periodeJabatan: { pimpinan: { nama_pimpinan: 'Pim B' } } }, { periodeJabatan: { pimpinan: { nama_pimpinan: 'Pim C' } } }]
-                },
-                { 
-                    nama_kegiatan: 'K3', statusAgendas: [{ status_agenda: 'completed' }],
-                    agendaPimpinans: []
-                }
-            ];
-            mockAgenda.findAll.mockResolvedValueOnce(mockDetails);
-
-            await DashboardController.getAdminStats(req, res);
-
-            const result = responseSpy.mock.calls[0][4];
-            expect(result.upcomingAgenda[0].status).toBe('Terkonfirmasi');
-            expect(result.upcomingAgenda[0].nama_pimpinan).toBe('Pim A');
-            
-            expect(result.upcomingAgenda[1].status).toBe('Diwakilkan');
-            expect(result.upcomingAgenda[1].nama_pimpinan).toBe('Pim B, Pim C');
-            
-            expect(result.upcomingAgenda[2].status).toBe('Selesai');
-            expect(result.upcomingAgenda[2].nama_pimpinan).toBe('-');
+            expect(result).toHaveProperty('stats');
+            expect(result).not.toHaveProperty('recentRequests');
+            expect(result).not.toHaveProperty('upcomingAgenda');
         });
 
         test('Error: Handle database failure', async () => {

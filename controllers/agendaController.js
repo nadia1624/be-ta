@@ -224,7 +224,14 @@ class AgendaController extends BaseController {
                     {
                         model: StatusAgenda,
                         as: 'statusAgendas',
-                        order: [['createdAt', 'DESC']]
+                        order: [['createdAt', 'DESC']],
+                        include: [
+                            {
+                                model: User,
+                                as: 'sespri',
+                                attributes: ['id_user', 'nama']
+                            }
+                        ]
                     },
                     {
                         model: AgendaPimpinan,
@@ -889,6 +896,21 @@ class AgendaController extends BaseController {
                 });
                 if (repPimpinan && repPimpinan.pimpinan) {
                     finalNamaPerwakilan = repPimpinan.pimpinan.nama_pimpinan;
+
+                    // VALIDATION: Check if the representative is already invited to this agenda
+                    const alreadyInvited = await AgendaPimpinan.findOne({
+                        where: {
+                            id_agenda,
+                            id_jabatan: id_jabatan_perwakilan,
+                            id_periode: id_periode_perwakilan
+                        },
+                        transaction
+                    });
+
+                    if (alreadyInvited) {
+                        await transaction.rollback();
+                        return this.sendResponse(res, 400, false, `${finalNamaPerwakilan} sudah masuk dalam daftar undangan agenda ini, sehingga tidak dapat ditunjuk sebagai perwakilan.`);
+                    }
                 }
             }
 
@@ -1048,13 +1070,15 @@ class AgendaController extends BaseController {
 
             if (newOverallStatus) {
                 const id_status_agenda = await this.generateStatusAgendaId(transaction);
+                const pimpinanLabel = originalPimpinanObj?.jabatan?.nama_jabatan || originalPimpinanObj?.pimpinan?.nama_pimpinan || 'Pimpinan';
+                
                 await StatusAgenda.create({
                     id_status_agenda,
                     id_agenda,
                     id_user_sespri: req.user.id_user,
                     status_agenda: newOverallStatus,
                     tanggal_status: new Date(),
-                    catatan: `Status diperbarui oleh ${nama_role} via kehadiran: ${status_kehadiran}`
+                    catatan: `[${pimpinanLabel}] - Status diperbarui oleh ${req.user.nama_role} via kehadiran: ${status_kehadiran}`
                 }, { transaction });
 
                 // Touch Agenda record to update its updatedAt timestamp for activity-based sorting
@@ -1104,31 +1128,54 @@ class AgendaController extends BaseController {
                 }
             }
 
-            // 5. Background Sync to Google Calendar
+            // === START GOOGLE CALENDAR SYNC ===
             try {
-                if (!originalPimpinanObj) return this.sendResponse(res, 200, true, 'Status kehadiran berhasil diperbarui', agendaPimpinan);
+                // 1. Identify previous state to handle cleanup
+                
+                // Fetch the pimpinan who is supposed to have the agenda NOW
+                let pimpinanToSync = null;
+                if (status_kehadiran === 'hadir') {
+                    pimpinanToSync = await Pimpinan.findByPk(originalPimpinanObj.id_pimpinan);
+                } else if (status_kehadiran === 'diwakilkan' && id_jabatan_perwakilan) {
+                    const repPeriode = await PeriodeJabatan.findOne({
+                        where: { id_jabatan: id_jabatan_perwakilan, id_periode: id_periode_perwakilan },
+                        attributes: ['id_pimpinan']
+                    });
+                    if (repPeriode) {
+                        pimpinanToSync = await Pimpinan.findByPk(repPeriode.id_pimpinan);
+                    }
+                }
 
-                const pimpinanToSync = await Pimpinan.findByPk(originalPimpinanObj.id_pimpinan);
+                // 2. Handle Cleanup: If there was an old event, we should try to delete it 
+                // To be safe, if google_event_id exists, we try to delete it from the original pimpinan 
+                // AND the current pimpinanToSync (if it's a different one) to avoid duplicates/stale events.
+                if (agendaPimpinan.google_event_id) {
+                    const originalPimpinan = await Pimpinan.findByPk(originalPimpinanObj.id_pimpinan);
+                    if (originalPimpinan && originalPimpinan.is_calendar_synced) {
+                        await googleCalendarHelper.deleteEvent(originalPimpinan, agendaPimpinan.google_event_id);
+                    }
 
-                if (pimpinanToSync && pimpinanToSync.is_calendar_synced) {
-                    const normalizedStatus = status_kehadiran?.toLowerCase();
-                    if (normalizedStatus === 'hadir') {
-                        const newEventId = await googleCalendarHelper.syncEvent(pimpinanToSync, agenda, agendaPimpinan.google_event_id);
-                        
-                        if (newEventId !== agendaPimpinan.google_event_id) {
-                            await agendaPimpinan.update({ google_event_id: newEventId });
-                        }
-                    } else {
-                        // If status changed from 'hadir' to something else, delete the event
-                        if (agendaPimpinan.google_event_id) {
-                            await googleCalendarHelper.deleteEvent(pimpinanToSync, agendaPimpinan.google_event_id);
-                            await agendaPimpinan.update({ google_event_id: null });
-                        }
+                    // If it was potentially on a representative's calendar before, we don't strictly know which one 
+                    // without a schema change. But usually, it's either the original or the NEW pimpinanToSync.
+                    if (pimpinanToSync && pimpinanToSync.id_pimpinan !== originalPimpinanObj.id_pimpinan && pimpinanToSync.is_calendar_synced) {
+                        await googleCalendarHelper.deleteEvent(pimpinanToSync, agendaPimpinan.google_event_id);
+                    }
+                }
+
+                // 3. Create New Event
+                if (pimpinanToSync && pimpinanToSync.is_calendar_synced && (status_kehadiran === 'hadir' || status_kehadiran === 'diwakilkan')) {
+                    const newEventId = await googleCalendarHelper.syncEvent(pimpinanToSync, agendaPimpinan.agenda);
+                    await agendaPimpinan.update({ google_event_id: newEventId });
+                } else {
+                    // If status is not attending or no sync, clear the event ID
+                    if (agendaPimpinan.google_event_id) {
+                        await agendaPimpinan.update({ google_event_id: null });
                     }
                 }
             } catch (syncError) {
-                console.error('Scheduled Google Sync Failed:', syncError);
+                console.error('SIMAP Google Calendar Sync Error:', syncError);
             }
+            // === END GOOGLE CALENDAR SYNC ===
 
             return this.sendResponse(res, 200, true, 'Status kehadiran berhasil diperbarui', agendaPimpinan);
         } catch (error) {

@@ -26,7 +26,7 @@ class EmailHelper {
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
                     <h2 style="color: #2c3e50; text-align: center;">Aktivasi Sinkronisasi Kalender</h2>
                     <p>Halo <strong>${pimpinan.nama_pimpinan}</strong>,</p>
-                    <p>Admin SI-PEPIM telah menambahkan/memperbarui data Anda. Untuk memudahkan manajemen jadwal, Anda dapat menyinkronkan agenda kegiatan Anda langsung ke Google Calendar pribadi Anda.</p>
+                    <p>Admin SIMAP telah menambahkan/memperbarui data Anda. Untuk memudahkan manajemen jadwal, Anda dapat menyinkronkan agenda kegiatan Anda langsung ke Google Calendar pribadi Anda.</p>
                     <div style="text-align: center; margin: 30px 0;">
                         <a href="${authUrl}" style="background-color: #3498db; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
                             Hubungkan ke Google Calendar
