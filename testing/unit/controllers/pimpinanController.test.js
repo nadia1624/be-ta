@@ -15,7 +15,9 @@ jest.mock('../../../models', () => {
             findOne: jest.fn(),
             create: jest.fn(),
         },
-        PimpinanAjudan: {},
+        PimpinanAjudan: {
+            update: jest.fn(),
+        },
         JabatanPimpinan: {
             findAll: jest.fn(),
         },
@@ -84,7 +86,8 @@ describe('PimpinanController Unit Tests', () => {
 
     describe('2. getAllPimpinan()', () => {
         test('1. Sukses mengambil data pimpinan (200)', async () => {
-            const mockData = [{ id_periode_jabatan: 1, pimpinan: {} }];
+            const mockPeriodes = [{ id_periode: 1, nama_periode: '2020-2025', status_periode: 'aktif' }];
+            const mockData = [{ id_periode_jabatan: 1, pimpinan: {}, status_aktif: 'aktif' }];
             PeriodeJabatan.findAll.mockResolvedValue(mockData);
 
             await PimpinanController.getAllPimpinan(req, res);
@@ -113,6 +116,57 @@ describe('PimpinanController Unit Tests', () => {
             id_jabatan: 'JAB001',
             status_aktif: 'aktif'
         };
+
+        describe('🔹 Validation Checks', () => {
+            test('1. Return 400 jika NIP sudah terdaftar oleh pimpinan lain', async () => {
+                req.body = { ...BODY, nip: '12345' };
+                // Mock findOne to return a DIFFERENT pimpinan
+                Pimpinan.findOne.mockResolvedValue({ id_pimpinan: 'P002', nip: '12345' });
+                
+                await PimpinanController.createOrUpdatePimpinan(req, res);
+
+                expect(res.status).toHaveBeenCalledWith(400);
+                expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ 
+                    success: false,
+                    message: 'NIP pimpinan sudah terdaftar' 
+                }));
+            });
+
+            test('2. Return 400 jika Email sudah terdaftar oleh pimpinan lain', async () => {
+                req.body = { ...BODY, email: 'budi@test.com' };
+                // Mock findOne: first call for NIP (none), second for Email (exists)
+                Pimpinan.findOne
+                    .mockResolvedValueOnce(null)
+                    .mockResolvedValueOnce({ id_pimpinan: 'P002', email: 'budi@test.com' });
+                
+                await PimpinanController.createOrUpdatePimpinan(req, res);
+
+                expect(res.status).toHaveBeenCalledWith(400);
+                expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ 
+                    success: false,
+                    message: 'Email pimpinan sudah terdaftar' 
+                }));
+            });
+
+            test('3. Return 400 jika jabatan sudah terisi oleh pimpinan lain', async () => {
+                req.body = BODY;
+                // No Pimpinan conflict
+                Pimpinan.findOne.mockResolvedValue(null);
+                Pimpinan.findAll.mockResolvedValue([]); // for generateId
+                Pimpinan.create.mockResolvedValue({ id_pimpinan: 'P001' });
+                
+                // Position already occupied by P002
+                PeriodeJabatan.findOne.mockResolvedValue({ id_pimpinan: 'P002' });
+                
+                await PimpinanController.createOrUpdatePimpinan(req, res);
+
+                expect(res.status).toHaveBeenCalledWith(400);
+                expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ 
+                    success: false,
+                    message: 'Jabatan ini sudah terisi oleh pimpinan lain pada periode tersebut' 
+                }));
+            });
+        });
 
         describe('🔹 Create Flow', () => {
             test('1. Pimpinan baru & Assignment baru -> create keduanya', async () => {
@@ -143,11 +197,12 @@ describe('PimpinanController Unit Tests', () => {
             });
 
             test('3. Tetap sukses meskipun kirim email gagal (edge case)', async () => {
-                req.body = BODY;
+                req.body = { ...BODY, id_pimpinan: 'P001' };
                 const mockPimpinan = { id_pimpinan: 'P001', update: jest.fn().mockResolvedValue({}) };
-                const mockAssignment = { update: jest.fn().mockResolvedValue({}) };
+                const mockAssignment = { id_pimpinan: 'P001', update: jest.fn().mockResolvedValue({}) };
                 
-                Pimpinan.findOne.mockResolvedValue(mockPimpinan);
+                Pimpinan.findOne.mockResolvedValue(null);
+                Pimpinan.findByPk.mockResolvedValue(mockPimpinan);
                 PeriodeJabatan.findOne.mockResolvedValue(mockAssignment);
                 emailHelper.sendSyncInvitation.mockRejectedValue(new Error('mail error'));
 
@@ -159,17 +214,46 @@ describe('PimpinanController Unit Tests', () => {
 
         describe('🔹 Update Flow', () => {
             test('1. Pimpinan ada & Assignment ada -> update keduanya', async () => {
-                req.body = BODY;
+                req.body = { ...BODY, id_pimpinan: 'P001' };
                 const mockPimpinan = { id_pimpinan: 'P001', update: jest.fn().mockResolvedValue({}) };
-                const mockAssignment = { update: jest.fn().mockResolvedValue({}) };
+                const mockAssignment = { id_pimpinan: 'P001', update: jest.fn().mockResolvedValue({}) };
                 
-                Pimpinan.findOne.mockResolvedValue(mockPimpinan);
+                // Mock uniqueness check: no other records with same NIP/Email
+                Pimpinan.findOne.mockResolvedValue(null);
+                Pimpinan.findByPk.mockResolvedValue(mockPimpinan);
                 PeriodeJabatan.findOne.mockResolvedValue(mockAssignment);
 
                 await PimpinanController.createOrUpdatePimpinan(req, res);
 
                 expect(mockPimpinan.update).toHaveBeenCalledWith(expect.objectContaining({ nama_pimpinan: 'Budi' }));
                 expect(mockAssignment.update).toHaveBeenCalledWith(expect.objectContaining({ id_pimpinan: 'P001' }));
+                expect(res.status).toHaveBeenCalledWith(200);
+            });
+        });
+
+        describe('🔹 Cascading Deactivation', () => {
+            test('1. Menonaktifkan pimpinan -> menonaktifkan ajudan pada periode tersebut', async () => {
+                req.body = { ...BODY, status_aktif: 'nonaktif', id_pimpinan: 'P001' };
+                const mockPimpinan = { id_pimpinan: 'P001', update: jest.fn().mockResolvedValue({}) };
+                const mockAssignment = { id_pimpinan: 'P001', update: jest.fn().mockResolvedValue({}) };
+                
+                // No uniqueness conflict
+                Pimpinan.findOne.mockResolvedValue(null);
+                Pimpinan.findByPk.mockResolvedValue(mockPimpinan);
+                PeriodeJabatan.findOne.mockResolvedValue(mockAssignment);
+                PimpinanAjudan.update.mockResolvedValue([1]);
+
+                await PimpinanController.createOrUpdatePimpinan(req, res);
+
+                expect(PimpinanAjudan.update).toHaveBeenCalledWith(
+                    { status_aktif: 'nonaktif' },
+                    expect.objectContaining({
+                        where: expect.objectContaining({
+                            id_jabatan: BODY.id_jabatan,
+                            id_periode: BODY.id_periode
+                        })
+                    })
+                );
                 expect(res.status).toHaveBeenCalledWith(200);
             });
         });
@@ -186,11 +270,12 @@ describe('PimpinanController Unit Tests', () => {
             });
 
             test('2. Default status_aktif ke "aktif" jika tidak disediakan', async () => {
-                req.body = { ...BODY, status_aktif: '' };
+                req.body = { ...BODY, status_aktif: '', id_pimpinan: 'P001' };
                 const mockPimpinan = { id_pimpinan: 'P001', update: jest.fn().mockResolvedValue({}) };
                 
-                Pimpinan.findOne.mockResolvedValue(mockPimpinan);
-                Pimpinan.findAll.mockResolvedValue([{ id_pimpinan: 'P001' }]); // case where generateId shouldn't even be called but for safety
+                // Mock uniqueness checks to return null (no conflict with OTHER records)
+                Pimpinan.findOne.mockResolvedValue(null);
+                Pimpinan.findByPk.mockResolvedValue(mockPimpinan);
                 PeriodeJabatan.findOne.mockResolvedValue(null);
                 PeriodeJabatan.create.mockResolvedValue({});
 

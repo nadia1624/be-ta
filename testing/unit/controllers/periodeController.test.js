@@ -121,6 +121,17 @@ describe('PeriodeController Unit Tests', () => {
 
             expect(errorSpy).toHaveBeenCalledWith(res, error, expect.any(String));
         });
+
+        test('7. Return 400 jika tanggal_mulai > tanggal_selesai', async () => {
+            req.body = { 
+                nama_periode: 'Invalid', 
+                tanggal_mulai: '2025-01-10', 
+                tanggal_selesai: '2025-01-01' 
+            };
+            await PeriodeController.createPeriode(req, res);
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(responseSpy).toHaveBeenCalledWith(res, 400, false, 'Tanggal mulai tidak boleh lebih lama dari tanggal selesai');
+        });
     });
 
     describe('2. getAllPeriode()', () => {
@@ -220,6 +231,17 @@ describe('PeriodeController Unit Tests', () => {
 
             await PeriodeController.updatePeriode(req, res);
             expect(errorSpy).toHaveBeenCalledWith(res, error, expect.any(String));
+        });
+
+        test('5. Return 400 jika tanggal_mulai > tanggal_selesai', async () => {
+            req.params = { id: 'PD001' };
+            req.body = { 
+                tanggal_mulai: '2025-01-10', 
+                tanggal_selesai: '2025-01-01' 
+            };
+            await PeriodeController.updatePeriode(req, res);
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(responseSpy).toHaveBeenCalledWith(res, 400, false, 'Tanggal mulai tidak boleh lebih lama dari tanggal selesai');
         });
     });
 

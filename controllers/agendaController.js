@@ -873,6 +873,15 @@ class AgendaController extends BaseController {
 
             const agenda = agendaPimpinan.agenda;
 
+            // Check if agenda has passed
+            const now = new Date();
+            const agendaEnd = new Date(`${agenda.tanggal_kegiatan}T${agenda.waktu_selesai}`);
+            if (agendaEnd < now) {
+                await transaction.rollback();
+                return this.sendResponse(res, 400, false, 'Agenda sudah selesai/lewat, tidak dapat mengubah status kehadiran.');
+            }
+
+
             let finalNamaPerwakilan = nama_perwakilan;
             let finalJabatanPerwakilan = '-';
             let originalPimpinanObj = null;

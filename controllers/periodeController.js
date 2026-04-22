@@ -5,6 +5,10 @@ class PeriodeController extends BaseController {
     async createPeriode(req, res) {
         try {
             const { nama_periode, tanggal_mulai, tanggal_selesai, keterangan, status_periode } = req.body;
+
+            if (new Date(tanggal_mulai) > new Date(tanggal_selesai)) {
+                return this.sendResponse(res, 400, false, 'Tanggal mulai tidak boleh lebih lama dari tanggal selesai');
+            }
             const periodes = await Periode.findAll({
                 attributes: ['id_periode']
             });
@@ -51,6 +55,10 @@ class PeriodeController extends BaseController {
         try {
             const { id } = req.params;
             const { nama_periode, tanggal_mulai, tanggal_selesai, keterangan, status_periode } = req.body;
+
+            if (new Date(tanggal_mulai) > new Date(tanggal_selesai)) {
+                return this.sendResponse(res, 400, false, 'Tanggal mulai tidak boleh lebih lama dari tanggal selesai');
+            }
 
             const periode = await Periode.findByPk(id);
 

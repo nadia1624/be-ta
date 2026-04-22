@@ -39,14 +39,44 @@ class PimpinanController extends BaseController {
     async createOrUpdatePimpinan(req, res) {
         try {
             const { 
-                nama_pimpinan, nip, email, no_hp, 
+                id_pimpinan, nama_pimpinan, nip, email, no_hp, 
                 id_periode, id_jabatan, status_aktif 
             } = req.body;
 
-            // 1. Find or Create Pimpinan
-            let pimpinan = await Pimpinan.findOne({ where: { nip } });
-            
-            if (!pimpinan) {
+            // 1. Uniqueness Checks
+            if (nip) {
+                const duplicateNip = await Pimpinan.findOne({
+                    where: {
+                        nip,
+                        ...(id_pimpinan && { id_pimpinan: { [Sequelize.Op.ne]: id_pimpinan } })
+                    }
+                });
+                if (duplicateNip) {
+                    return this.sendResponse(res, 400, false, 'NIP pimpinan sudah terdaftar');
+                }
+            }
+
+            if (email) {
+                const duplicateEmail = await Pimpinan.findOne({
+                    where: {
+                        email,
+                        ...(id_pimpinan && { id_pimpinan: { [Sequelize.Op.ne]: id_pimpinan } })
+                    }
+                });
+                if (duplicateEmail) {
+                    return this.sendResponse(res, 400, false, 'Email pimpinan sudah terdaftar');
+                }
+            }
+
+            // 2. Find or Create Pimpinan
+            let pimpinan;
+            if (id_pimpinan) {
+                pimpinan = await Pimpinan.findByPk(id_pimpinan);
+                if (!pimpinan) {
+                    return this.sendResponse(res, 404, false, 'Pimpinan tidak ditemukan');
+                }
+                await pimpinan.update({ nama_pimpinan, nip, email, no_hp });
+            } else {
                 const newId = await this.generateId();
                 pimpinan = await Pimpinan.create({
                     id_pimpinan: newId,
@@ -55,9 +85,6 @@ class PimpinanController extends BaseController {
                     email,
                     no_hp
                 });
-            } else {
-                // Update existing pimpinan info
-                await pimpinan.update({ nama_pimpinan, email, no_hp });
             }
 
             let assignment = await PeriodeJabatan.findOne({
@@ -67,11 +94,28 @@ class PimpinanController extends BaseController {
                 }
             });
 
+            if (assignment && assignment.id_pimpinan && assignment.id_pimpinan !== pimpinan.id_pimpinan) {
+                return this.sendResponse(res, 400, false, 'Jabatan ini sudah terisi oleh pimpinan lain pada periode tersebut');
+            }
+
             if (assignment) {
                 await assignment.update({
                     id_pimpinan: pimpinan.id_pimpinan,
                     status_aktif: status_aktif || 'aktif'
                 });
+
+                // Cascading deactivation for Ajudan assignments in the same period and position
+                if (status_aktif === 'nonaktif') {
+                    await PimpinanAjudan.update(
+                        { status_aktif: 'nonaktif' },
+                        { 
+                            where: { 
+                                id_jabatan: id_jabatan,
+                                id_periode: id_periode 
+                            } 
+                        }
+                    );
+                }
             } else {
                 await PeriodeJabatan.create({
                     id_pimpinan: pimpinan.id_pimpinan,

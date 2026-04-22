@@ -735,7 +735,10 @@ describe('AgendaController Unit Tests', () => {
 
             test('2. Return 400 jika perwakilan sudah masuk dalam daftar undangan', async () => {
                 PimpinanAjudan.findOne.mockResolvedValue({});
-                const ap = { id_agenda: 'AG1' };
+                const ap = { 
+                    id_agenda: 'AG1',
+                    agenda: { tanggal_kegiatan: '2099-01-01', waktu_selesai: '10:00' }
+                };
                 AgendaPimpinan.findOne
                     .mockResolvedValueOnce(ap) // First call: find the record to update
                     .mockResolvedValueOnce({ id_agenda: 'AG1', id_jabatan: 'J2' }); // Second call: validation check
@@ -746,9 +749,36 @@ describe('AgendaController Unit Tests', () => {
                 const res = mockRes();
                 await AgendaController.updateLeaderAttendance(req, res);
 
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ 
+                    message: expect.stringContaining('sudah masuk dalam daftar undangan agenda ini') 
+                }));
+                expect(mockTx.rollback).toHaveBeenCalled();
+            });
+
+            test('3. Return 400 jika agenda sudah lewat/selesai', async () => {
+                PimpinanAjudan.findOne.mockResolvedValue({});
+                const pastDate = new Date();
+                pastDate.setDate(pastDate.getDate() - 1); // Yesterday
+                const pastDateStr = pastDate.toISOString().split('T')[0];
+
+                const ap = { 
+                    id_agenda: 'AG1',
+                    agenda: { 
+                        tanggal_kegiatan: pastDateStr, 
+                        waktu_selesai: '10:00' 
+                    },
+                    update: jest.fn()
+                };
+                AgendaPimpinan.findOne.mockResolvedValue(ap);
+
+                const req = mockReq(BODY, USER, PARAMS);
+                const res = mockRes();
+                
+                await AgendaController.updateLeaderAttendance(req, res);
+
                 expect(res.status).toHaveBeenCalledWith(400);
                 expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ 
-                    message: expect.stringContaining('sudah masuk dalam daftar undangan agenda ini') 
+                    message: 'Agenda sudah selesai/lewat, tidak dapat mengubah status kehadiran.' 
                 }));
                 expect(mockTx.rollback).toHaveBeenCalled();
             });
@@ -759,7 +789,7 @@ describe('AgendaController Unit Tests', () => {
                 PimpinanAjudan.findOne.mockResolvedValue({});
                 const ap = { 
                     id_agenda: 'AG1',
-                    agenda: { waktu_mulai: '08:00', waktu_selesai: '10:00', tanggal_kegiatan: '2025-01-01' },
+                    agenda: { waktu_mulai: '08:00', waktu_selesai: '10:00', tanggal_kegiatan: '2099-01-01' },
                     update: jest.fn()
                 };
                 AgendaPimpinan.findOne.mockResolvedValue(ap);
@@ -785,7 +815,7 @@ describe('AgendaController Unit Tests', () => {
                 const ap = { 
                     id_agenda: 'AG1',
                     google_event_id: null,
-                    agenda: { waktu_mulai: '08:00', waktu_selesai: '10:00', tanggal_kegiatan: '2025-01-01' },
+                    agenda: { waktu_mulai: '08:00', waktu_selesai: '10:00', tanggal_kegiatan: '2099-01-01' },
                     update: jest.fn()
                 };
                 AgendaPimpinan.findOne.mockResolvedValue(ap);
