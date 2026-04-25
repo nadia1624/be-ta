@@ -30,7 +30,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true
     },
     tanggal_revisi: {
-      type: DataTypes.DATEONLY,
+      type: DataTypes.DATE,
       allowNull: true
     }
   }, {

@@ -46,7 +46,7 @@ module.exports = {
         allowNull: true
       },
       tanggal_kirim: {
-        type: Sequelize.DATEONLY,
+        type: Sequelize.DATE,
         allowNull: true
       },
       createdAt: {

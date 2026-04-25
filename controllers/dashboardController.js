@@ -242,9 +242,11 @@ class DashboardController extends BaseController {
 
     async getKasubagMediaStats(req, res) {
         try {
-            const today = new Date().toISOString().split('T')[0];
-            const currentMonth = new Date().getMonth();
-            const currentYear = new Date().getFullYear();
+            const now = new Date();
+            const today = now.toISOString().split('T')[0];
+            const currentTime = now.toTimeString().split(' ')[0];
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
 
             // 1. Stats Cards data
             const staffList = await User.findAll({
@@ -393,22 +395,36 @@ class DashboardController extends BaseController {
             // 5. Perlu Penugasan
             const agendasForAssign = await Agenda.findAll({
                 where: {
-                    tanggal_kegiatan: { [Op.gte]: today },
-                    id_agenda: {
-                        [Op.in]: sequelize.literal(`(
-                            SELECT sa1.id_agenda
-                            FROM "StatusAgenda" sa1
-                            WHERE sa1.id_status_agenda = (
-                                SELECT sa2.id_status_agenda
-                                FROM "StatusAgenda" sa2
-                                WHERE sa2.id_agenda = sa1.id_agenda
-                                ORDER BY sa2."createdAt" DESC
-                                LIMIT 1
-                            )
-                            AND sa1.status_agenda IN ('approved_ajudan', 'delegated', 'completed')
-                            AND sa1.id_agenda NOT IN (SELECT id_agenda FROM "Penugasans" WHERE jenis_penugasan = 'media')
-                        )`)
-                    }
+                    [Op.and]: [
+                        {
+                            [Op.or]: [
+                                { tanggal_kegiatan: { [Op.gt]: today } },
+                                {
+                                    [Op.and]: [
+                                        { tanggal_kegiatan: today },
+                                        { waktu_mulai: { [Op.gt]: currentTime } }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            id_agenda: {
+                                [Op.in]: sequelize.literal(`(
+                                    SELECT sa1.id_agenda
+                                    FROM "StatusAgenda" sa1
+                                    WHERE sa1.id_status_agenda = (
+                                        SELECT sa2.id_status_agenda
+                                        FROM "StatusAgenda" sa2
+                                        WHERE sa2.id_agenda = sa1.id_agenda
+                                        ORDER BY sa2."createdAt" DESC
+                                        LIMIT 1
+                                    )
+                                    AND sa1.status_agenda IN ('approved_ajudan', 'delegated', 'completed')
+                                    AND sa1.id_agenda NOT IN (SELECT id_agenda FROM "Penugasans" WHERE jenis_penugasan = 'media')
+                                )`)
+                            }
+                        }
+                    ]
                 },
                 limit: 5,
                 order: [['updatedAt', 'DESC']]
@@ -440,9 +456,11 @@ class DashboardController extends BaseController {
 
     async getKasubagProtokolStats(req, res) {
         try {
-            const today = new Date().toISOString().split('T')[0];
-            const currentMonth = new Date().getMonth();
-            const currentYear = new Date().getFullYear();
+            const now = new Date();
+            const today = now.toISOString().split('T')[0];
+            const currentTime = now.toTimeString().split(' ')[0];
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
 
             // 1. Stats Cards data
             const staffList = await User.findAll({
@@ -584,22 +602,36 @@ class DashboardController extends BaseController {
             // 4. Perlu Penugasan
             const agendasForAssign = await Agenda.findAll({
                 where: {
-                    tanggal_kegiatan: { [Op.gte]: today },
-                    id_agenda: {
-                        [Op.in]: sequelize.literal(`(
-                            SELECT sa1.id_agenda
-                            FROM "StatusAgenda" sa1
-                            WHERE sa1.id_status_agenda = (
-                                SELECT sa2.id_status_agenda
-                                FROM "StatusAgenda" sa2
-                                WHERE sa2.id_agenda = sa1.id_agenda
-                                ORDER BY sa2."createdAt" DESC
-                                LIMIT 1
-                            )
-                            AND sa1.status_agenda IN ('approved_ajudan', 'delegated', 'completed')
-                            AND sa1.id_agenda NOT IN (SELECT id_agenda FROM "Penugasans" WHERE jenis_penugasan = 'protokol')
-                        )`)
-                    }
+                    [Op.and]: [
+                        {
+                            [Op.or]: [
+                                { tanggal_kegiatan: { [Op.gt]: today } },
+                                {
+                                    [Op.and]: [
+                                        { tanggal_kegiatan: today },
+                                        { waktu_mulai: { [Op.gt]: currentTime } }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            id_agenda: {
+                                [Op.in]: sequelize.literal(`(
+                                    SELECT sa1.id_agenda
+                                    FROM "StatusAgenda" sa1
+                                    WHERE sa1.id_status_agenda = (
+                                        SELECT sa2.id_status_agenda
+                                        FROM "StatusAgenda" sa2
+                                        WHERE sa2.id_agenda = sa1.id_agenda
+                                        ORDER BY sa2."createdAt" DESC
+                                        LIMIT 1
+                                    )
+                                    AND sa1.status_agenda IN ('approved_ajudan', 'delegated', 'completed')
+                                    AND sa1.id_agenda NOT IN (SELECT id_agenda FROM "Penugasans" WHERE jenis_penugasan = 'protokol')
+                                )`)
+                            }
+                        }
+                    ]
                 },
                 limit: 5,
                 order: [['updatedAt', 'DESC']]

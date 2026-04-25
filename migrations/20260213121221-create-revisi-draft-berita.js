@@ -24,7 +24,7 @@ module.exports = {
         allowNull: true
       },
       tanggal_revisi: {
-        type: Sequelize.DATEONLY,
+        type: Sequelize.DATE,
         allowNull: true
       },
       createdAt: {

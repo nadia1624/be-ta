@@ -62,7 +62,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true
     },
     tanggal_kirim: {
-      type: DataTypes.DATEONLY,
+      type: DataTypes.DATE,
       allowNull: true
     }
   }, {
