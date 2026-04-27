@@ -27,7 +27,7 @@ class DashboardController extends BaseController {
 
     async getSespriStats(req, res) {
         try {
-            const today = new Date().toISOString().split('T')[0];
+            const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
 
             // 1. Stats Cards data
             const pendingVerification = await StatusAgenda.count({
@@ -45,12 +45,16 @@ class DashboardController extends BaseController {
                 }
             });
 
+            const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
+            const startOfDay = new Date(`${todayStr}T00:00:00+07:00`);
+            const endOfDay = new Date(`${todayStr}T23:59:59.999+07:00`);
+
             const approvedToday = await StatusAgenda.count({
                 where: {
                     status_agenda: 'approved_sespri',
                     createdAt: {
-                        [Op.gte]: new Date(new Date().setHours(0, 0, 0, 0)),
-                        [Op.lt]: new Date(new Date().setHours(23, 59, 59, 999))
+                        [Op.gte]: startOfDay,
+                        [Op.lt]: endOfDay
                     }
                 }
             });
@@ -138,6 +142,10 @@ class DashboardController extends BaseController {
                             {
                                 model: PeriodeJabatan,
                                 as: 'periodeJabatanDiusulkan',
+                                on: {
+                                    id_jabatan: { [Op.col]: 'slotAgendaPimpinans.id_jabatan_diusulkan' },
+                                    id_periode: { [Op.col]: 'slotAgendaPimpinans.id_periode_diusulkan' }
+                                },
                                 include: [
                                     { model: JabatanPimpinan, as: 'jabatan' },
                                     { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
@@ -146,6 +154,10 @@ class DashboardController extends BaseController {
                             {
                                 model: PeriodeJabatan,
                                 as: 'periodeJabatanHadir',
+                                on: {
+                                    id_jabatan: { [Op.col]: 'slotAgendaPimpinans.id_jabatan_hadir' },
+                                    id_periode: { [Op.col]: 'slotAgendaPimpinans.id_periode_hadir' }
+                                },
                                 include: [
                                     { model: JabatanPimpinan, as: 'jabatan' },
                                     { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
@@ -243,10 +255,16 @@ class DashboardController extends BaseController {
     async getKasubagMediaStats(req, res) {
         try {
             const now = new Date();
-            const today = now.toISOString().split('T')[0];
-            const currentTime = now.toTimeString().split(' ')[0];
-            const currentMonth = now.getMonth();
-            const currentYear = now.getFullYear();
+            const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(now);
+            const currentTime = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'Asia/Jakarta' }).format(now);
+            
+            // For monthly workload range in Jakarta timezone
+            const startOfMonth = `${today.substring(0, 7)}-01`;
+            const nextMonth = new Date(now);
+            nextMonth.setMonth(nextMonth.getMonth() + 1);
+            const nextMonthStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(nextMonth);
+            const endOfMonth = `${nextMonthStr.substring(0, 7)}-01`;
+
 
             // 1. Stats Cards data
             const staffList = await User.findAll({
@@ -266,7 +284,8 @@ class DashboardController extends BaseController {
             const activeAssignmentsCount = await Penugasan.count({
                 where: {
                     status: { [Op.ne]: 'selesai' },
-                    id_user_kasubag: req.user.id_user // Correct column name
+                    id_user_kasubag: req.user.id_user,
+                    jenis_penugasan: 'media'
                 }
             });
 
@@ -323,6 +342,10 @@ class DashboardController extends BaseController {
                             {
                                 model: PeriodeJabatan,
                                 as: 'periodeJabatanDiusulkan',
+                                on: {
+                                    id_jabatan: { [Op.col]: 'slotAgendaPimpinans.id_jabatan_diusulkan' },
+                                    id_periode: { [Op.col]: 'slotAgendaPimpinans.id_periode_diusulkan' }
+                                },
                                 include: [
                                     { model: JabatanPimpinan, as: 'jabatan' },
                                     { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
@@ -331,6 +354,10 @@ class DashboardController extends BaseController {
                             {
                                 model: PeriodeJabatan,
                                 as: 'periodeJabatanHadir',
+                                on: {
+                                    id_jabatan: { [Op.col]: 'slotAgendaPimpinans.id_jabatan_hadir' },
+                                    id_periode: { [Op.col]: 'slotAgendaPimpinans.id_periode_hadir' }
+                                },
                                 include: [
                                     { model: JabatanPimpinan, as: 'jabatan' },
                                     { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
@@ -354,9 +381,10 @@ class DashboardController extends BaseController {
             const allAssignmentsThisMonth = await Penugasan.findAll({
                 where: {
                     tanggal_penugasan: {
-                        [Op.gte]: new Date(currentYear, currentMonth, 1),
-                        [Op.lt]: new Date(currentYear, currentMonth + 1, 1)
-                    }
+                        [Op.gte]: startOfMonth,
+                        [Op.lt]: endOfMonth
+                    },
+                    jenis_penugasan: 'media'
                 },
                 include: [{
                     model: SlotAgendaStaff,
@@ -388,6 +416,14 @@ class DashboardController extends BaseController {
                         model: User,
                         as: 'staff',
                         attributes: ['nama']
+                    },
+                    {
+                        model: Penugasan,
+                        as: 'penugasan',
+                        where: { id_user_kasubag: req.user.id_user },
+                        required: true,
+                        attributes: ['id_penugasan'],
+                        include: [{ model: Agenda, as: 'agenda', attributes: ['nama_kegiatan'] }]
                     }
                 ]
             });
@@ -457,10 +493,16 @@ class DashboardController extends BaseController {
     async getKasubagProtokolStats(req, res) {
         try {
             const now = new Date();
-            const today = now.toISOString().split('T')[0];
-            const currentTime = now.toTimeString().split(' ')[0];
-            const currentMonth = now.getMonth();
-            const currentYear = now.getFullYear();
+            const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(now);
+            const currentTime = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'Asia/Jakarta' }).format(now);
+
+            // For monthly workload range in Jakarta timezone
+            const startOfMonth = `${today.substring(0, 7)}-01`;
+            const nextMonth = new Date(now);
+            nextMonth.setMonth(nextMonth.getMonth() + 1);
+            const nextMonthStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(nextMonth);
+            const endOfMonth = `${nextMonthStr.substring(0, 7)}-01`;
+
 
             // 1. Stats Cards data
             const staffList = await User.findAll({
@@ -472,21 +514,24 @@ class DashboardController extends BaseController {
             const activeAssignmentsCount = await Penugasan.count({
                 where: {
                     id_user_kasubag: req.user.id_user,
-                    status: { [Op.ne]: 'selesai' }
+                    status: { [Op.ne]: 'selesai' },
+                    jenis_penugasan: 'protokol'
                 }
             });
 
             const completedAssignmentsCount = await Penugasan.count({
                 where: {
                     id_user_kasubag: req.user.id_user,
-                    status: 'selesai'
+                    status: 'selesai',
+                    jenis_penugasan: 'protokol'
                 }
             });
 
             const onProgressAssignmentsCount = await Penugasan.count({
                 where: {
                     id_user_kasubag: req.user.id_user,
-                    status: 'progress'
+                    status: 'progress',
+                    jenis_penugasan: 'protokol'
                 }
             });
 
@@ -505,7 +550,7 @@ class DashboardController extends BaseController {
                                 ORDER BY sa2."createdAt" DESC
                                 LIMIT 1
                             )
-                            AND sa1.status_agenda IN ('approved_sespri', 'approved_ajudan', 'delegated', 'completed')
+                            AND sa1.status_agenda IN ('approved_sespri', 'approved_ajudan', 'delegated', 'completed', 'rejected_sespri', 'rejected_ajudan')
                         )`)
                     }
                 },
@@ -543,6 +588,10 @@ class DashboardController extends BaseController {
                             {
                                 model: PeriodeJabatan,
                                 as: 'periodeJabatanDiusulkan',
+                                on: {
+                                    id_jabatan: { [Op.col]: 'slotAgendaPimpinans.id_jabatan_diusulkan' },
+                                    id_periode: { [Op.col]: 'slotAgendaPimpinans.id_periode_diusulkan' }
+                                },
                                 include: [
                                     { model: JabatanPimpinan, as: 'jabatan' },
                                     { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
@@ -551,6 +600,10 @@ class DashboardController extends BaseController {
                             {
                                 model: PeriodeJabatan,
                                 as: 'periodeJabatanHadir',
+                                on: {
+                                    id_jabatan: { [Op.col]: 'slotAgendaPimpinans.id_jabatan_hadir' },
+                                    id_periode: { [Op.col]: 'slotAgendaPimpinans.id_periode_hadir' }
+                                },
                                 include: [
                                     { model: JabatanPimpinan, as: 'jabatan' },
                                     { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
@@ -575,8 +628,8 @@ class DashboardController extends BaseController {
             const allAssignmentsThisMonth = await Penugasan.findAll({
                 where: {
                     tanggal_penugasan: {
-                        [Op.gte]: new Date(currentYear, currentMonth, 1),
-                        [Op.lt]: new Date(currentYear, currentMonth + 1, 1)
+                        [Op.gte]: startOfMonth,
+                        [Op.lt]: endOfMonth
                     },
                     jenis_penugasan: 'protokol'
                 },
@@ -664,7 +717,7 @@ class DashboardController extends BaseController {
     async getStafMediaStats(req, res) {
         try {
             const { id_user } = req.user;
-            const today = new Date().toISOString().split('T')[0];
+            const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
 
             // 1. Stats from DraftBerita
             const pendingReview = await DraftBerita.count({ where: { id_user_staff: id_user, status_draft: 'draft' } });
@@ -712,10 +765,24 @@ class DashboardController extends BaseController {
                         include: [{
                             model: PeriodeJabatan,
                             as: 'periodeJabatan',
+                            on: {
+                                id_jabatan: { [Op.col]: 'agendaPimpinans.id_jabatan' },
+                                id_periode: { [Op.col]: 'agendaPimpinans.id_periode' }
+                            },
                             include: [
                                 { model: JabatanPimpinan, as: 'jabatan' },
                                 { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
                             ]
+                        }]
+                    },
+                    {
+                        model: Penugasan,
+                        as: 'penugasans',
+                        separate: true,
+                        include: [{
+                            model: LaporanKegiatan,
+                            as: 'laporanKegiatans',
+                            attributes: ['id_laporan', 'deskripsi_laporan', 'catatan_laporan', 'dokumentasi_laporan', 'createdAt']
                         }]
                     }
                 ]
@@ -747,6 +814,10 @@ class DashboardController extends BaseController {
                                     {
                                         model: PeriodeJabatan,
                                         as: 'periodeJabatan',
+                                        on: {
+                                            id_jabatan: { [Op.col]: 'agenda->agendaPimpinans.id_jabatan' },
+                                            id_periode: { [Op.col]: 'agenda->agendaPimpinans.id_periode' }
+                                        },
                                         include: [
                                             { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
                                         ]
@@ -811,7 +882,7 @@ class DashboardController extends BaseController {
     async getStafProtokolStats(req, res) {
         try {
             const { id_user } = req.user;
-            const today = new Date().toISOString().split('T')[0];
+            const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
 
             // 1. Stats from Penugasan (via SlotAgendaStaff)
             const assignedPenugasanIds = await SlotAgendaStaff.findAll({
@@ -875,6 +946,10 @@ class DashboardController extends BaseController {
                         include: [{
                             model: PeriodeJabatan,
                             as: 'periodeJabatan',
+                            on: {
+                                id_jabatan: { [Op.col]: 'agendaPimpinans.id_jabatan' },
+                                id_periode: { [Op.col]: 'agendaPimpinans.id_periode' }
+                            },
                             include: [
                                 { model: JabatanPimpinan, as: 'jabatan' },
                                 { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
@@ -912,6 +987,10 @@ class DashboardController extends BaseController {
                                     {
                                         model: PeriodeJabatan,
                                         as: 'periodeJabatan',
+                                        on: {
+                                            id_jabatan: { [Op.col]: 'agenda->agendaPimpinans.id_jabatan' },
+                                            id_periode: { [Op.col]: 'agenda->agendaPimpinans.id_periode' }
+                                        },
                                         include: [
                                             { model: Pimpinan, as: 'pimpinan', attributes: ['nama_pimpinan'] }
                                         ]

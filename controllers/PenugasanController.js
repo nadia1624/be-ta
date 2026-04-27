@@ -127,7 +127,19 @@ class PenugasanController extends BaseController {
                 order: [['updatedAt', 'DESC']]
             });
 
-            return this.sendResponse(res, 200, true, 'Data agenda untuk penugasan berhasil diambil', agendas);
+            const result = agendas.map(a => {
+                const plain = a.toJSON();
+                const pimpinans = (plain.agendaPimpinans || []).map(ap => ({
+                    nama_pimpinan: ap.periodeJabatan?.pimpinan?.nama_pimpinan || '-',
+                    nama_jabatan: ap.periodeJabatan?.jabatan?.nama_jabatan || '-',
+                    status_kehadiran: ap.status_kehadiran,
+                    nama_perwakilan: ap.nama_perwakilan,
+                    is_representative: ap.status_kehadiran === 'diwakilkan' && !!ap.nama_perwakilan
+                }));
+                return { ...plain, pimpinans };
+            });
+
+            return this.sendResponse(res, 200, true, 'Data agenda untuk penugasan berhasil diambil', result);
         } catch (error) {
             return this.sendError(res, error, 'Error fetching agendas for assignment');
         }
@@ -180,7 +192,19 @@ class PenugasanController extends BaseController {
                 order: [['updatedAt', 'DESC']]
             });
 
-            return this.sendResponse(res, 200, true, 'Data agenda untuk penugasan media berhasil diambil', agendas);
+            const result = agendas.map(a => {
+                const plain = a.toJSON();
+                const pimpinans = (plain.agendaPimpinans || []).map(ap => ({
+                    nama_pimpinan: ap.periodeJabatan?.pimpinan?.nama_pimpinan || '-',
+                    nama_jabatan: ap.periodeJabatan?.jabatan?.nama_jabatan || '-',
+                    status_kehadiran: ap.status_kehadiran,
+                    nama_perwakilan: ap.nama_perwakilan,
+                    is_representative: ap.status_kehadiran === 'diwakilkan' && !!ap.nama_perwakilan
+                }));
+                return { ...plain, pimpinans };
+            });
+
+            return this.sendResponse(res, 200, true, 'Data agenda untuk penugasan media berhasil diambil', result);
         } catch (error) {
             return this.sendError(res, error, 'Error fetching agendas for media assignment');
         }
@@ -255,7 +279,7 @@ class PenugasanController extends BaseController {
                 id_user_kasubag,
                 jenis_penugasan,
                 deskripsi_penugasan,
-                tanggal_penugasan: new Date(),
+                tanggal_penugasan: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0],
                 status: 'pending'
             }, { transaction });
 
@@ -427,10 +451,6 @@ class PenugasanController extends BaseController {
                 order: [['createdAt', 'DESC']]
             });
 
-            // Compute status_pelaksanaan dynamically
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-
             const result = penugasanList.map(p => {
                 const plain = p.toJSON();
 
@@ -452,10 +472,14 @@ class PenugasanController extends BaseController {
                 });
                 const nama_staf = Object.values(staffMap);
 
-                // Support multiple pimpinans
+                // Support multiple pimpinans (User Request: Use AgendaPimpinan directly)
                 const pimpinans = (plain.agenda?.agendaPimpinans || []).map(ap => ({
                     nama_pimpinan: ap.periodeJabatan?.pimpinan?.nama_pimpinan || '-',
-                    nama_jabatan: ap.periodeJabatan?.jabatan?.nama_jabatan || '-'
+                    nama_jabatan: ap.periodeJabatan?.jabatan?.nama_jabatan || '-',
+                    status_kehadiran: ap.status_kehadiran,
+                    nama_perwakilan: ap.nama_perwakilan,
+                    is_representative: ap.status_kehadiran === 'diwakilkan' && !!ap.nama_perwakilan,
+                    representing: ap.status_kehadiran === 'diwakilkan' ? ap.periodeJabatan?.pimpinan?.nama_pimpinan : null
                 }));
 
                 return { ...plain, status_pelaksanaan, nama_staf, pimpinans };
@@ -558,10 +582,9 @@ class PenugasanController extends BaseController {
                     return this.sendResponse(res, 403, false, 'Anda tidak memiliki akses ke penugasan ini');
                 }
             } else if (isStaffProtokol) {
-                // Staff Protokol can only see it if they are assigned to at least one slot
-                const isAssigned = penugasan.slotAgendaStaffs.some(s => String(s.id_user_staff) === String(id_user));
-                if (!isAssigned) {
-                    return this.sendResponse(res, 403, false, 'Anda tidak terdaftar dalam penugasan ini');
+                // Staff Protokol can see all protocol assignments
+                if (penugasan.jenis_penugasan !== 'protokol') {
+                    return this.sendResponse(res, 403, false, 'Anda tidak memiliki akses ke penugasan ini');
                 }
             } else {
                 // Other Kasubags (e.g. Kasubag Protokol) can only see what they created
@@ -593,15 +616,20 @@ class PenugasanController extends BaseController {
             // Support multiple pimpinans
             const pimpinans = (plain.agenda?.agendaPimpinans || []).map(ap => ({
                 nama_pimpinan: ap.periodeJabatan?.pimpinan?.nama_pimpinan || '-',
-                nama_jabatan: ap.periodeJabatan?.jabatan?.nama_jabatan || '-'
+                nama_jabatan: ap.periodeJabatan?.jabatan?.nama_jabatan || '-',
+                status_kehadiran: ap.status_kehadiran,
+                nama_perwakilan: ap.nama_perwakilan,
+                is_representative: ap.status_kehadiran === 'diwakilkan' && !!ap.nama_perwakilan
             }));
 
             return this.sendResponse(res, 200, true, 'Detail penugasan berhasil diambil', {
                 ...plain,
                 status_pelaksanaan,
                 nama_staf,
-                pimpinans
+                pimpinans,
+                is_assigned: plain.slotAgendaStaffs?.some(s => String(s.id_user_staff) === String(req.user.id_user))
             });
+
         } catch (error) {
             return this.sendError(res, error, 'Error fetching penugasan detail');
         }
@@ -640,7 +668,7 @@ class PenugasanController extends BaseController {
                     id_agenda: penugasan.id_agenda,
                     id_user_sespri: id_user_auth, // Current actor ID
                     status_agenda: 'completed',
-                    tanggal_status: new Date().toISOString().split('T')[0],
+                    tanggal_status: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0],
                     catatan: `Agenda sudah selesai dilakukan.`
                 }, { transaction });
             }
@@ -730,11 +758,16 @@ class PenugasanController extends BaseController {
 
                 const pimpinans = (plain.agenda?.agendaPimpinans || []).map(ap => ({
                     nama_pimpinan: ap.periodeJabatan?.pimpinan?.nama_pimpinan || '-',
-                    nama_jabatan: ap.periodeJabatan?.jabatan?.nama_jabatan || '-'
+                    nama_jabatan: ap.periodeJabatan?.jabatan?.nama_jabatan || '-',
+                    status_kehadiran: ap.status_kehadiran,
+                    nama_perwakilan: ap.nama_perwakilan,
+                    is_representative: ap.status_kehadiran === 'diwakilkan' && !!ap.nama_perwakilan
                 }));
 
-                return { ...plain, status_pelaksanaan, nama_staf, pimpinans };
+                const is_assigned = !!staffMap[req.user.id_user];
+                return { ...plain, status_pelaksanaan, nama_staf, pimpinans, is_assigned };
             });
+
 
             return this.sendResponse(res, 200, true, 'Data penugasan protokol berhasil diambil', result);
         } catch (error) {

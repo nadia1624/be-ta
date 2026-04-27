@@ -8,14 +8,14 @@ const initReminders = () => {
   // Run every minute
   cron.schedule('* * * * *', async () => {
     try {
-      const now = moment();
+      const now = moment().utcOffset(7);
       const today = now.format('YYYY-MM-DD');
       
       // Check for reminders 30 mins and 60 mins before
       const windows = [30, 60];
 
       for (const minutesBefore of windows) {
-        const targetTime = moment().add(minutesBefore, 'minutes');
+        const targetTime = moment().utcOffset(7).add(minutesBefore, 'minutes');
         const timeStr = targetTime.format('HH:mm:00');
         
         // Find agendas starting today at targetTime

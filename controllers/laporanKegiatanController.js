@@ -70,7 +70,7 @@ class LaporanKegiatanController extends BaseController {
             }
 
             // Verify if today is >= agenda date
-            const today = new Date().toISOString().split('T')[0];
+            const today = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0];
             const agendaDate = penugasan.agenda?.tanggal_kegiatan;
 
             if (agendaDate && today < agendaDate) {

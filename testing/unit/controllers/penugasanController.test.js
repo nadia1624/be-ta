@@ -200,11 +200,27 @@ describe('PenugasanController Unit Tests', () => {
         });
 
         test('1. getAgendasForAssignment: Return 200 jika sukses', async () => {
-            const mockAgendas = [{ id_agenda: 'A1', nama_kegiatan: 'K1' }];
+            const mockAgendas = [
+                { 
+                    id_agenda: 'A1', 
+                    nama_kegiatan: 'K1',
+                    toJSON: () => ({
+                        id_agenda: 'A1',
+                        nama_kegiatan: 'K1',
+                        agendaPimpinans: [{
+                            status_kehadiran: 'hadir',
+                            periodeJabatan: { pimpinan: { nama_pimpinan: 'L1' } }
+                        }]
+                    })
+                }
+            ];
             mockAgenda.findAll.mockResolvedValue(mockAgendas);
             await PenugasanController.getAgendasForAssignment(req, res);
             expect(res.status).toHaveBeenCalledWith(200);
-            expect(responseSpy).toHaveBeenCalledWith(res, 200, true, expect.any(String), mockAgendas);
+            expect(responseSpy).toHaveBeenCalledWith(res, 200, true, expect.any(String), expect.any(Array));
+            
+            const result = responseSpy.mock.calls[0][4];
+            expect(result[0].pimpinans[0].nama_pimpinan).toBe('L1');
         });
 
         test('2. getAgendasForAssignment: Return error jika database gagal', async () => {
@@ -215,11 +231,28 @@ describe('PenugasanController Unit Tests', () => {
         });
 
         test('3. getAgendasForMediaAssignment: Return 200 jika sukses', async () => {
-            const mockAgendas = [{ id_agenda: 'A2', nama_kegiatan: 'Media K' }];
+            const mockAgendas = [
+                { 
+                    id_agenda: 'A2', 
+                    nama_kegiatan: 'Media K',
+                    toJSON: () => ({
+                        id_agenda: 'A2',
+                        nama_kegiatan: 'Media K',
+                        agendaPimpinans: [{
+                            status_kehadiran: 'diwakilkan',
+                            nama_perwakilan: 'Wakil 1',
+                            periodeJabatan: { pimpinan: { nama_pimpinan: 'L2' } }
+                        }]
+                    })
+                }
+            ];
             mockAgenda.findAll.mockResolvedValue(mockAgendas);
             await PenugasanController.getAgendasForMediaAssignment(req, res);
             expect(res.status).toHaveBeenCalledWith(200);
-            expect(responseSpy).toHaveBeenCalledWith(res, 200, true, expect.any(String), mockAgendas);
+            expect(responseSpy).toHaveBeenCalledWith(res, 200, true, expect.any(String), expect.any(Array));
+
+            const result = responseSpy.mock.calls[0][4];
+            expect(result[0].pimpinans[0].is_representative).toBe(true);
         });
 
         test('4. getAgendasForMediaAssignment: Return error jika database gagal', async () => {

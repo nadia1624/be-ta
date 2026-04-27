@@ -86,7 +86,7 @@ class GoogleCalendarHelper {
             // Formatting Date & Time properly
             const dateStr = typeof agenda.tanggal_kegiatan === 'string' 
                 ? agenda.tanggal_kegiatan 
-                : new Date(agenda.tanggal_kegiatan).toISOString().split('T')[0];
+                : new Date(agenda.tanggal_kegiatan).toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0];
             
             const formatTime = (timeStr) => {
                 if (!timeStr) return '00:00';

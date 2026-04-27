@@ -26,15 +26,35 @@ const upload = multer({
     storage,
     limits: { fileSize: 50 * 1024 * 1024 }, // Increase to 50MB limit
     fileFilter: (req, file, cb) => {
-        const allowed = ['.jpg', '.jpeg', '.png', '.mp4', '.mov'];
+        const allowed = ['.jpg', '.jpeg', '.png', '.mp4', '.mov', '.webm'];
         const ext = path.extname(file.originalname).toLowerCase();
         if (allowed.includes(ext)) {
             cb(null, true);
         } else {
-            cb(new Error('Hanya file JPG, PNG, dan Video yang diizinkan'));
+            cb(new Error('Hanya file JPG, PNG, dan Video (MP4/MOV/WEBM) yang diizinkan'));
         }
     }
 });
+
+// Wrapper middleware to handle Multer errors
+const uploadMiddleware = (req, res, next) => {
+    const uploadArray = upload.array('dokumentasi', 10);
+    
+    uploadArray(req, res, (err) => {
+        if (err instanceof multer.MulterError) {
+            // A Multer error occurred when uploading.
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({ success: false, message: 'Ukuran file terlalu besar. Maksimal 50MB' });
+            }
+            return res.status(400).json({ success: false, message: `Error upload: ${err.message}` });
+        } else if (err) {
+            // An unknown error occurred when uploading.
+            return res.status(400).json({ success: false, message: err.message });
+        }
+        // Everything went fine.
+        next();
+    });
+};
 
 router.get('/public', beritaController.getPublicBerita);
 router.get('/public/:id', beritaController.getPublicBeritaDetail);
@@ -47,6 +67,6 @@ router.patch('/drafts/:id/review', authenticateToken, authorizeRoles('Kasubag Me
 
 // Routes for Staff Media
 router.get('/my-drafts', authenticateToken, authorizeRoles('Staff Media', 'Staf Media'), beritaController.getMyDrafts);
-router.post('/drafts', authenticateToken, authorizeRoles('Staff Media', 'Staf Media'), upload.array('dokumentasi', 10), beritaController.submitDraftBerita);
+router.post('/drafts', authenticateToken, authorizeRoles('Staff Media', 'Staf Media'), uploadMiddleware, beritaController.submitDraftBerita);
 
 module.exports = router;

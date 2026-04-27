@@ -78,7 +78,7 @@ class AgendaController extends BaseController {
             }
 
             // Date validation (must be in the future - after today)
-            const today = new Date().toISOString().split('T')[0];
+            const today = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0];
             if (tanggal_kegiatan <= today) {
                 await transaction.rollback();
                 return this.sendResponse(res, 400, false, 'Tanggal kegiatan harus setelah hari ini (minimal besok)');
@@ -93,6 +93,20 @@ class AgendaController extends BaseController {
             const id_agenda = await this.generateAgendaId(transaction);
             const id_status_agenda = await this.generateStatusAgendaId(transaction);
 
+            // Validasi keunikan nomor surat per user (instansi)
+            const existingAgenda = await Agenda.findOne({
+                where: {
+                    nomor_surat: nomor_surat,
+                    id_user_pemohon: id_user_pemohon
+                },
+                transaction
+            });
+
+            if (existingAgenda) {
+                await transaction.rollback();
+                return this.sendResponse(res, 400, false, `Nomor surat "${nomor_surat}" sudah pernah Anda gunakan untuk permohonan lain.`);
+            }
+
             const surat_permohonan = req.file ? req.file.path : null;
 
             const newAgenda = await Agenda.create({
@@ -102,7 +116,7 @@ class AgendaController extends BaseController {
                 tanggal_surat,
                 perihal,
                 surat_permohonan,
-                tanggal_pengajuan: new Date(),
+                tanggal_pengajuan: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0],
                 tanggal_kegiatan,
                 waktu_mulai,
                 waktu_selesai,
@@ -117,7 +131,7 @@ class AgendaController extends BaseController {
                 id_agenda: newAgenda.id_agenda,
                 id_user_sespri: req.user.id_user,
                 status_agenda: isSespri ? 'approved_sespri' : 'pending',
-                tanggal_status: new Date(),
+                tanggal_status: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0],
                 catatan: isSespri ? 'Agenda ditambahkan langsung oleh Sespri' : 'Permohonan baru diajukan'
             }, { transaction });
 
@@ -373,7 +387,7 @@ class AgendaController extends BaseController {
                 id_agenda,
                 id_user_sespri: req.user.id_user,
                 status_agenda: status,
-                tanggal_status: new Date(),
+                tanggal_status: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0],
                 catatan: catatan || `Status diperbarui oleh Sespri via verifikasi: ${status}`
             }, { transaction });
 
@@ -516,6 +530,8 @@ class AgendaController extends BaseController {
                 return this.sendResponse(res, 400, false, 'Agenda hanya bisa diedit jika status adalah revisi');
             }
 
+            const todayStr = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0];
+            
             const {
                 nomor_surat, tanggal_surat, perihal,
                 nama_kegiatan, lokasi_kegiatan, contact_person, keterangan,
@@ -523,7 +539,22 @@ class AgendaController extends BaseController {
                 kaskpd_pendamping
             } = req.body;
 
-            const todayStr = new Date().toISOString().split('T')[0];
+            // Validasi keunikan nomor surat jika nomor_surat diubah
+            if (nomor_surat) {
+                const existingAgenda = await Agenda.findOne({
+                    where: {
+                        nomor_surat,
+                        id_user_pemohon: agenda.id_user_pemohon,
+                        id_agenda: { [Op.ne]: id_agenda }
+                    },
+                    transaction
+                });
+
+                if (existingAgenda) {
+                    await transaction.rollback();
+                    return this.sendResponse(res, 400, false, `Nomor surat "${nomor_surat}" sudah digunakan oleh permohonan lain Anda.`);
+                }
+            }
             
             // Validate tanggal_kegiatan if provided
             if (tanggal_kegiatan && tanggal_kegiatan <= todayStr) {
@@ -626,7 +657,7 @@ class AgendaController extends BaseController {
                     id_agenda,
                     id_user_sespri: req.user.id_user,
                     status_agenda: 'pending',
-                    tanggal_status: new Date(),
+                    tanggal_status: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0],
                     catatan: 'Permohonan telah direvisi oleh pemohon'
                 }, { transaction });
 
@@ -875,7 +906,7 @@ class AgendaController extends BaseController {
 
             // Check if agenda has passed
             const now = new Date();
-            const agendaEnd = new Date(`${agenda.tanggal_kegiatan}T${agenda.waktu_selesai}`);
+            const agendaEnd = new Date(`${agenda.tanggal_kegiatan}T${agenda.waktu_selesai}+07:00`);
             if (agendaEnd < now) {
                 await transaction.rollback();
                 return this.sendResponse(res, 400, false, 'Agenda sudah selesai/lewat, tidak dapat mengubah status kehadiran.');
@@ -1086,7 +1117,7 @@ class AgendaController extends BaseController {
                     id_agenda,
                     id_user_sespri: req.user.id_user,
                     status_agenda: newOverallStatus,
-                    tanggal_status: new Date(),
+                    tanggal_status: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0],
                     catatan: `[${pimpinanLabel}] - Status diperbarui oleh ${req.user.nama_role} via kehadiran: ${status_kehadiran}`
                 }, { transaction });
 
@@ -1231,7 +1262,7 @@ class AgendaController extends BaseController {
                 id_agenda,
                 id_user_sespri: req.user.id_user,
                 status_agenda: 'canceled',
-                tanggal_status: new Date(),
+                tanggal_status: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0],
                 catatan: 'Dibatalkan oleh pemohon'
             }, { transaction });
 

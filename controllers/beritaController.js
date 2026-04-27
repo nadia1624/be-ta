@@ -150,7 +150,7 @@ class BeritaController extends BaseController {
             }
 
             // Verify if today is >= agenda date
-            const today = new Date().toISOString().split('T')[0];
+            const today = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0];
             const agendaDate = penugasan.agenda?.tanggal_kegiatan;
 
             if (agendaDate && today < agendaDate) {
@@ -246,6 +246,26 @@ class BeritaController extends BaseController {
             }
 
             await transaction.commit();
+
+            // Notify Kasubag Media who assigned the task
+            try {
+                if (penugasan.id_user_kasubag) {
+                    const notificationPayload = {
+                        title: 'Draft Berita Baru',
+                        body: `Staf ${req.user.nama} telah menyerahkan draft berita untuk kegiatan "${penugasan.agenda?.nama_kegiatan || 'Kegiatan'}".`,
+                        data: {
+                            url: '/kasubag-media/review-draft',
+                            id_draft_berita: id_draft_berita,
+                            id_penugasan: id_penugasan
+                        }
+                    };
+                    await sendPushNotification(penugasan.id_user_kasubag, notificationPayload);
+                }
+            } catch (notifyError) {
+                console.error('Error sending notification to Kasubag:', notifyError);
+                // Don't fail the request if notification fails
+            }
+
             return this.sendResponse(res, 201, true, 'Draft berita berhasil diserahkan', draft);
         } catch (error) {
             if (transaction) await transaction.rollback();
