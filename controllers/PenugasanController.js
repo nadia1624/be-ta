@@ -4,9 +4,7 @@ const { Penugasan, SlotAgendaStaff, SlotAgendaPimpinan, AgendaPimpinan, User, Ro
 const { sendPushNotification } = require('../helpers/pushNotificationHelper');
 
 class PenugasanController extends BaseController {
-    /**
-     * Helper to generate Penugasan ID
-     */
+
     async generatePenugasanId() {
         const lastPenugasan = await Penugasan.findOne({ 
             order: [['id_penugasan', 'DESC']],
@@ -362,6 +360,7 @@ class PenugasanController extends BaseController {
             return this.sendError(res, error, 'Error creating assignment');
         }
     }
+    
     async getMyPenugasan(req, res) {
         try {
             const { id_user, nama_role } = req.user;

@@ -20,7 +20,7 @@ class BeritaController extends BaseController {
                         as: 'dokumentasis'
                     }
                 ],
-                order: [['tanggal_kirim', 'DESC']],
+                order: [['updatedAt', 'DESC']],
                 limit: limit,
                 offset: offset,
                 distinct: true // Important when using findAndCountAll with includes
@@ -163,6 +163,12 @@ class BeritaController extends BaseController {
             let id_draft_berita;
 
             if (draft) {
+                // Berita yang sudah disetujui tidak boleh diubah lagi
+                if (draft.status_draft === 'approved') {
+                    await transaction.rollback();
+                    return this.sendResponse(res, 403, false, 'Draft berita yang sudah disetujui tidak dapat diubah kembali');
+                }
+
                 // Update draft yang sudah ada
                 id_draft_berita = draft.id_draft_berita;
                 await draft.update({

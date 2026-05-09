@@ -55,11 +55,11 @@ module.exports = {
         allowNull: true
       },
       lokasi_kegiatan: {
-        type: Sequelize.STRING(50),
+        type: Sequelize.STRING(255),
         allowNull: true
       },
       contact_person: {
-        type: Sequelize.STRING(20),
+        type: Sequelize.STRING(100),
         allowNull: true
       },
       keterangan: {

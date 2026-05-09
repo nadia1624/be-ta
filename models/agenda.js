@@ -82,11 +82,11 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true
     },
     lokasi_kegiatan: {
-      type: DataTypes.STRING(50),
+      type: DataTypes.STRING(255),
       allowNull: true
     },
     contact_person: {
-      type: DataTypes.STRING(20),
+      type: DataTypes.STRING(100),
       allowNull: true
     },
     keterangan: {

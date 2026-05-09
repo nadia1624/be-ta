@@ -38,7 +38,8 @@ describe('Reminder Scheduler', () => {
     // Setup moment mock
     const mockNow = {
       format: jest.fn().mockReturnValue('2023-10-10'),
-      add: jest.fn().mockReturnThis()
+      add: jest.fn().mockReturnThis(),
+      utcOffset: jest.fn().mockReturnThis()
     };
     moment.mockReturnValue(mockNow);
 
@@ -74,7 +75,11 @@ describe('Reminder Scheduler', () => {
   });
 
   test('cron job should not send notification if userAjudan is missing', async () => {
-    const mockNow = { format: jest.fn().mockReturnValue('2023-10-10'), add: jest.fn().mockReturnThis() };
+    const mockNow = { 
+      format: jest.fn().mockReturnValue('2023-10-10'), 
+      add: jest.fn().mockReturnThis(),
+      utcOffset: jest.fn().mockReturnThis()
+    };
     moment.mockReturnValue(mockNow);
     initReminders();
     const cronJobAction = cron.schedule.mock.calls[0][1];
@@ -90,7 +95,11 @@ describe('Reminder Scheduler', () => {
   });
 
   test('cron job should handle database errors (catch block)', async () => {
-    const mockNow = { format: jest.fn().mockReturnValue('2023-10-10'), add: jest.fn().mockReturnThis() };
+    const mockNow = { 
+      format: jest.fn().mockReturnValue('2023-10-10'), 
+      add: jest.fn().mockReturnThis(),
+      utcOffset: jest.fn().mockReturnThis()
+    };
     moment.mockReturnValue(mockNow);
     initReminders();
     const cronJobAction = cron.schedule.mock.calls[0][1];
@@ -104,7 +113,11 @@ describe('Reminder Scheduler', () => {
   });
 
   test('cron job should do nothing if no upcoming agendas found', async () => {
-    const mockNow = { format: jest.fn().mockReturnValue('2023-10-10'), add: jest.fn().mockReturnThis() };
+    const mockNow = { 
+      format: jest.fn().mockReturnValue('2023-10-10'), 
+      add: jest.fn().mockReturnThis(),
+      utcOffset: jest.fn().mockReturnThis()
+    };
     moment.mockReturnValue(mockNow);
     initReminders();
     const cronJobAction = cron.schedule.mock.calls[0][1];

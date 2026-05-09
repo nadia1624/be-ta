@@ -34,14 +34,6 @@ module.exports = (sequelize, DataTypes) => {
         model: 'KASKPDs',
         key: 'id_ka_skpd'
       }
-    },
-    nama_pendamping: {
-      type: DataTypes.STRING(50),
-      allowNull: true
-    },
-    jabatan: {
-      type: DataTypes.STRING(50),
-      allowNull: true
     }
   }, {
     sequelize,

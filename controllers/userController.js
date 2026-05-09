@@ -61,12 +61,18 @@ class UserController extends BaseController {
                 id_jabatan_ajudan, id_periode_ajudan, keterangan_ajudan 
             } = req.body;
 
-            // Validations
-            const existingEmail = await User.findOne({ where: { email } });
-            if (existingEmail) return this.sendResponse(res, 400, false, 'Email sudah terdaftar');
+            // Normalize email & NIP
+            const normalizedEmail = email ? email.toLowerCase().trim() : null;
+            const normalizedNip = (nip && nip.trim() !== '') ? nip.trim() : null;
 
-            if (nip) {
-                const existingNip = await User.findOne({ where: { nip } });
+            // Validations
+            if (normalizedEmail) {
+                const existingEmail = await User.findOne({ where: { email: normalizedEmail } });
+                if (existingEmail) return this.sendResponse(res, 400, false, 'Email sudah terdaftar');
+            }
+
+            if (normalizedNip) {
+                const existingNip = await User.findOne({ where: { nip: normalizedNip } });
                 if (existingNip) return this.sendResponse(res, 400, false, 'NIP sudah terdaftar');
             }
 
@@ -76,10 +82,10 @@ class UserController extends BaseController {
             const newUser = await User.create({
                 id_user,
                 nama,
-                email,
+                email: normalizedEmail,
                 password: hashedPassword,
                 id_role: role_id,
-                nip,
+                nip: normalizedNip,
                 no_hp,
                 status_aktif: status_aktif || 'aktif',
                 instansi,
@@ -107,11 +113,36 @@ class UserController extends BaseController {
             const user = await User.findByPk(id_user);
             if (!user) return this.sendResponse(res, 404, false, 'User tidak ditemukan');
 
+            // Normalize email & NIP
+            const normalizedEmail = email ? email.toLowerCase().trim() : null;
+            const normalizedNip = (nip && nip.trim() !== '') ? nip.trim() : null;
+
+            // Validations
+            if (normalizedEmail) {
+                const existingEmail = await User.findOne({ 
+                    where: { 
+                        email: normalizedEmail,
+                        id_user: { [Op.ne]: id_user }
+                    } 
+                });
+                if (existingEmail) return this.sendResponse(res, 400, false, 'Email sudah digunakan oleh akun lain');
+            }
+
+            if (normalizedNip) {
+                const existingNip = await User.findOne({ 
+                    where: { 
+                        nip: normalizedNip,
+                        id_user: { [Op.ne]: id_user }
+                    } 
+                });
+                if (existingNip) return this.sendResponse(res, 400, false, 'NIP sudah digunakan oleh akun lain');
+            }
+
             // Update fields
             user.nama = nama;
-            user.email = email;
+            user.email = normalizedEmail;
             user.id_role = role_id;
-            user.nip = nip;
+            user.nip = normalizedNip;
             user.no_hp = no_hp;
             user.status_aktif = status_aktif;
             user.instansi = instansi;

@@ -63,11 +63,13 @@ module.exports = (sequelize, DataTypes) => {
     },
     nip: {
       type: DataTypes.STRING(30),
-      allowNull: true
+      allowNull: true,
+      unique: true
     },
     email: {
       type: DataTypes.STRING(50),
-      allowNull: true
+      allowNull: true,
+      unique: true
     },
     password: {
       type: DataTypes.STRING(255),

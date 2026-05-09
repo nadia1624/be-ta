@@ -99,7 +99,7 @@ describe('Google Calendar Helper', () => {
     });
 
     test('syncEvent should handle new event insertion', async () => {
-        const pimpinan = { id_pimpinan: 'P001' };
+        const pimpinan = { id_pimpinan: 'P001', google_access_token: 'at' };
         const agenda = { 
             nama_kegiatan: 'Test',
             tanggal_kegiatan: '2023-10-10',
@@ -131,7 +131,7 @@ describe('Google Calendar Helper', () => {
     });
 
     test('syncEvent should handle formatting edge cases', async () => {
-        const pimpinan = {};
+        const pimpinan = { google_access_token: 'at' };
         const agenda = { 
             nama_kegiatan: 'Edge Case',
             tanggal_kegiatan: new Date('2023-11-11'),
@@ -161,7 +161,7 @@ describe('Google Calendar Helper', () => {
     test('syncEvent should throw and log error on failure', async () => {
         const error = new Error('Sync Failed');
         mockEvents.insert.mockRejectedValue(error);
-        const pimpinan = { id_pimpinan: 'P' };
+        const pimpinan = { id_pimpinan: 'P', google_access_token: 'at' };
         const agenda = { tanggal_kegiatan: '2023-01-01' };
         const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -171,7 +171,7 @@ describe('Google Calendar Helper', () => {
     });
 
     test('deleteEvent should call calendar events delete', async () => {
-        const pimpinan = { id_pimpinan: 'P001' };
+        const pimpinan = { id_pimpinan: 'P001', google_access_token: 'at' };
         const eventId = 'delete_me';
 
         await googleCalendarHelper.deleteEvent(pimpinan, eventId);
@@ -192,8 +192,8 @@ describe('Google Calendar Helper', () => {
         
         mockEvents.delete.mockRejectedValueOnce(error404).mockRejectedValueOnce(error410);
 
-        await googleCalendarHelper.deleteEvent({}, 'id1');
-        await googleCalendarHelper.deleteEvent({}, 'id2');
+        await googleCalendarHelper.deleteEvent({ google_access_token: 'at' }, 'id1');
+        await googleCalendarHelper.deleteEvent({ google_access_token: 'at' }, 'id2');
 
         expect(mockEvents.delete).toHaveBeenCalledTimes(2);
         // No error should be thrown
@@ -204,7 +204,7 @@ describe('Google Calendar Helper', () => {
         mockEvents.delete.mockRejectedValue(error500);
         const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-        await expect(googleCalendarHelper.deleteEvent({}, 'id')).rejects.toEqual(error500);
+        await expect(googleCalendarHelper.deleteEvent({ google_access_token: 'at' }, 'id')).rejects.toEqual(error500);
         expect(consoleSpy).toHaveBeenCalled();
         consoleSpy.mockRestore();
     });

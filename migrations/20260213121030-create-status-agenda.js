@@ -21,7 +21,7 @@ module.exports = {
       },
       id_user_sespri: {
         type: Sequelize.STRING(10),
-        allowNull: false,
+        allowNull: true,
         references: {
           model: 'Users',
           key: 'id_user'

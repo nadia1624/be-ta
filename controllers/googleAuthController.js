@@ -1,5 +1,6 @@
 const BaseController = require('./BaseController');
-const { Pimpinan } = require('../models');
+const { Pimpinan, AgendaPimpinan, Agenda, PeriodeJabatan } = require('../models');
+const { Op } = require('sequelize');
 const googleCalendarHelper = require('../helpers/googleCalendarHelper');
 require('dotenv').config();
 
@@ -46,10 +47,44 @@ class GoogleAuthController extends BaseController {
             // Update Pimpinan with tokens
             await pimpinan.update({
                 google_access_token: tokens.access_token,
-                google_refresh_token: tokens.refresh_token || pimpinan.google_refresh_token, // Refresh token only sent on first prompt
+                google_refresh_token: tokens.refresh_token || pimpinan.google_refresh_token,
                 google_token_expiry: tokens.expiry_date,
                 is_calendar_synced: true
             });
+
+            // --- AUTO-SYNC PENDING AGENDAS ---
+            try {
+                const today = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0];
+                const unsynced = await AgendaPimpinan.findAll({
+                    where: {
+                        status_kehadiran: { [Op.in]: ['hadir', 'diwakilkan'] },
+                        google_event_id: null
+                    },
+                    include: [
+                        { 
+                            model: Agenda, 
+                            as: 'agenda',
+                            where: { tanggal_kegiatan: { [Op.gte]: today } }
+                        },
+                        { 
+                            model: PeriodeJabatan, 
+                            as: 'periodeJabatan',
+                            where: { id_pimpinan: pimpinan.id_pimpinan }
+                        }
+                    ]
+                });
+
+                for (const ap of unsynced) {
+                    const titlePrefix = ap.status_kehadiran === 'diwakilkan' ? '[DIWAKILI] ' : '';
+                    const eventId = await googleCalendarHelper.syncEvent(pimpinan, ap.agenda, null, titlePrefix);
+                    if (eventId) {
+                        await ap.update({ google_event_id: eventId });
+                    }
+                }
+            } catch (syncError) {
+                console.error('[Google Auth] Auto-sync failed:', syncError);
+            }
+            // --------------------------------
 
             // Redirect back to frontend success page
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';

@@ -31,7 +31,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     id_user_sespri: {
       type: DataTypes.STRING(10),
-      allowNull: false,
+      allowNull: true,
       references: {
         model: 'Users',
         key: 'id_user'

@@ -1,7 +1,7 @@
 const BaseController = require('./BaseController');
 const { PimpinanAjudan, User, PeriodeJabatan, Pimpinan, JabatanPimpinan, Periode, Sequelize, sequelize } = require('../models');
 
-class AjudanAssignmentController extends BaseController {
+class PenugasanAjudanController extends BaseController {
     
     async getAllAssignments(req, res) {
         try {
@@ -63,7 +63,7 @@ class AjudanAssignmentController extends BaseController {
                 id_user_ajudan,
                 id_jabatan,
                 id_periode,
-                keterangan: keterangan || 'Penugasan Ajudan Baru',
+                keterangan: keterangan || 'Penugasan Ajudan',
                 status_aktif: assignmentCount === 0 ? 'aktif' : 'nonaktif'
             }, { transaction });
 
@@ -142,4 +142,4 @@ class AjudanAssignmentController extends BaseController {
     }
 }
 
-module.exports = new AjudanAssignmentController();
+module.exports = new PenugasanAjudanController();

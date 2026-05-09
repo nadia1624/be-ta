@@ -18,7 +18,7 @@ describe('StatusAgenda Model', () => {
           primaryKey: true 
         }),
         id_user_sespri: expect.objectContaining({ 
-          allowNull: false 
+          allowNull: true 
         }),
         status_agenda: expect.objectContaining({
           type: expect.objectContaining({ 

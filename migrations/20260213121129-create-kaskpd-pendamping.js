@@ -26,14 +26,6 @@ module.exports = {
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
       },
-      nama_pendamping: {
-        type: Sequelize.STRING(50),
-        allowNull: true
-      },
-      jabatan: {
-        type: Sequelize.STRING(50),
-        allowNull: true
-      },
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE,

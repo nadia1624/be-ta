@@ -84,10 +84,12 @@ module.exports = {
       name: 'idx_users_role'
     });
     await queryInterface.addIndex('Users', ['email'], {
-      name: 'idx_users_email'
+      name: 'idx_users_email',
+      unique: true
     });
     await queryInterface.addIndex('Users', ['nip'], {
-      name: 'idx_users_nip'
+      name: 'idx_users_nip',
+      unique: true
     });
     await queryInterface.addIndex('Users', ['status_aktif'], {
       name: 'idx_users_status'

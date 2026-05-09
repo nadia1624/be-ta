@@ -1,5 +1,5 @@
 const { PimpinanAjudan, User, PeriodeJabatan, Pimpinan, JabatanPimpinan, Periode, Sequelize, sequelize } = require('../../../models');
-const AjudanAssignmentController = require('../../../controllers/AjudanAssignmentController');
+const PenugasanAjudanController = require('../../../controllers/PenugasanAjudanController');
 
 jest.mock('../../../models', () => {
     const tx = {
@@ -32,7 +32,7 @@ jest.mock('../../../models', () => {
     };
 });
 
-describe('AjudanAssignmentController Unit Tests', () => {
+describe('PenugasanAjudanController Unit Tests', () => {
     let req, res;
     const mockTx = sequelize._tx;
 
@@ -56,7 +56,7 @@ describe('AjudanAssignmentController Unit Tests', () => {
             const mockData = [{ id_pimpinan_ajudan: 1 }];
             PimpinanAjudan.findAll.mockResolvedValue(mockData);
 
-            await AjudanAssignmentController.getAllAssignments(req, res);
+            await PenugasanAjudanController.getAllAssignments(req, res);
 
             expect(PimpinanAjudan.findAll).toHaveBeenCalledWith(expect.objectContaining({
                 include: expect.any(Array),
@@ -72,7 +72,7 @@ describe('AjudanAssignmentController Unit Tests', () => {
         it('should return 500 if database error occurs', async () => {
             PimpinanAjudan.findAll.mockRejectedValue(new Error('DB Error'));
 
-            await AjudanAssignmentController.getAllAssignments(req, res);
+            await PenugasanAjudanController.getAllAssignments(req, res);
 
             expect(res.status).toHaveBeenCalledWith(500);
         });
@@ -92,7 +92,7 @@ describe('AjudanAssignmentController Unit Tests', () => {
                 req.body = BODY;
                 PimpinanAjudan.findOne.mockResolvedValue({ id_pimpinan_ajudan: 1 });
 
-                await AjudanAssignmentController.createAssignment(req, res);
+                await PenugasanAjudanController.createAssignment(req, res);
 
                 expect(mockTx.rollback).toHaveBeenCalled();
                 expect(res.status).toHaveBeenCalledWith(400);
@@ -110,7 +110,7 @@ describe('AjudanAssignmentController Unit Tests', () => {
                 PimpinanAjudan.count.mockResolvedValue(0);
                 PimpinanAjudan.create.mockResolvedValue({ ...BODY, status_aktif: 'aktif' });
 
-                await AjudanAssignmentController.createAssignment(req, res);
+                await PenugasanAjudanController.createAssignment(req, res);
 
                 expect(PimpinanAjudan.create).toHaveBeenCalledWith(
                     expect.objectContaining({ status_aktif: 'aktif' }),
@@ -128,7 +128,7 @@ describe('AjudanAssignmentController Unit Tests', () => {
                 PimpinanAjudan.count.mockResolvedValue(5);
                 PimpinanAjudan.create.mockResolvedValue({ ...BODY, status_aktif: 'nonaktif' });
 
-                await AjudanAssignmentController.createAssignment(req, res);
+                await PenugasanAjudanController.createAssignment(req, res);
 
                 expect(PimpinanAjudan.create).toHaveBeenCalledWith(
                     expect.objectContaining({ status_aktif: 'nonaktif' }),
@@ -146,10 +146,10 @@ describe('AjudanAssignmentController Unit Tests', () => {
                 PimpinanAjudan.count.mockResolvedValue(0);
                 PimpinanAjudan.create.mockResolvedValue({});
 
-                await AjudanAssignmentController.createAssignment(req, res);
+                await PenugasanAjudanController.createAssignment(req, res);
 
                 expect(PimpinanAjudan.create).toHaveBeenCalledWith(
-                    expect.objectContaining({ keterangan: 'Penugasan Ajudan Baru' }),
+                    expect.objectContaining({ keterangan: 'Penugasan Ajudan' }),
                     expect.anything()
                 );
             });
@@ -160,7 +160,7 @@ describe('AjudanAssignmentController Unit Tests', () => {
                 req.body = BODY;
                 PimpinanAjudan.findOne.mockRejectedValue(new Error('Error'));
 
-                await AjudanAssignmentController.createAssignment(req, res);
+                await PenugasanAjudanController.createAssignment(req, res);
 
                 expect(mockTx.rollback).toHaveBeenCalled();
                 expect(res.status).toHaveBeenCalledWith(500);
@@ -171,7 +171,7 @@ describe('AjudanAssignmentController Unit Tests', () => {
                 PimpinanAjudan.findOne.mockResolvedValue(null);
                 PimpinanAjudan.count.mockRejectedValue(new Error('Error'));
 
-                await AjudanAssignmentController.createAssignment(req, res);
+                await PenugasanAjudanController.createAssignment(req, res);
 
                 expect(mockTx.rollback).toHaveBeenCalled();
                 expect(res.status).toHaveBeenCalledWith(500);
@@ -183,7 +183,7 @@ describe('AjudanAssignmentController Unit Tests', () => {
                 PimpinanAjudan.count.mockResolvedValue(0);
                 PimpinanAjudan.create.mockRejectedValue(new Error('Error'));
 
-                await AjudanAssignmentController.createAssignment(req, res);
+                await PenugasanAjudanController.createAssignment(req, res);
 
                 expect(mockTx.rollback).toHaveBeenCalled();
                 expect(res.status).toHaveBeenCalledWith(500);
@@ -206,7 +206,7 @@ describe('AjudanAssignmentController Unit Tests', () => {
             // Second update: activate selected
             PimpinanAjudan.update.mockResolvedValueOnce([1]);
 
-            await AjudanAssignmentController.setActiveAssignment(req, res);
+            await PenugasanAjudanController.setActiveAssignment(req, res);
 
             expect(PimpinanAjudan.update).toHaveBeenCalledWith(
                 { status_aktif: 'nonaktif' },
@@ -225,7 +225,7 @@ describe('AjudanAssignmentController Unit Tests', () => {
             PimpinanAjudan.update.mockResolvedValueOnce([5]); // Deactivate success
             PimpinanAjudan.update.mockResolvedValueOnce([0]); // Activate failed (not found)
 
-            await AjudanAssignmentController.setActiveAssignment(req, res);
+            await PenugasanAjudanController.setActiveAssignment(req, res);
 
             expect(mockTx.rollback).toHaveBeenCalled();
             expect(res.status).toHaveBeenCalledWith(404);
@@ -235,7 +235,7 @@ describe('AjudanAssignmentController Unit Tests', () => {
             req.body = BODY;
             PimpinanAjudan.update.mockRejectedValue(new Error('DB Error'));
 
-            await AjudanAssignmentController.setActiveAssignment(req, res);
+            await PenugasanAjudanController.setActiveAssignment(req, res);
 
             expect(mockTx.rollback).toHaveBeenCalled();
             expect(res.status).toHaveBeenCalledWith(500);
@@ -253,7 +253,7 @@ describe('AjudanAssignmentController Unit Tests', () => {
         it('should return 400 if required parameters are missing', async () => {
             req.body = { id_user_ajudan: 'AJU001' }; // missing jabatan and periode
 
-            await AjudanAssignmentController.deleteAssignment(req, res);
+            await PenugasanAjudanController.deleteAssignment(req, res);
 
             expect(res.status).toHaveBeenCalledWith(400);
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
@@ -266,7 +266,7 @@ describe('AjudanAssignmentController Unit Tests', () => {
             req.body = BODY;
             PimpinanAjudan.destroy.mockResolvedValue(1);
 
-            await AjudanAssignmentController.deleteAssignment(req, res);
+            await PenugasanAjudanController.deleteAssignment(req, res);
 
             expect(PimpinanAjudan.destroy).toHaveBeenCalledWith(expect.objectContaining({
                 where: BODY
@@ -278,7 +278,7 @@ describe('AjudanAssignmentController Unit Tests', () => {
             req.body = BODY;
             PimpinanAjudan.destroy.mockResolvedValue(0);
 
-            await AjudanAssignmentController.deleteAssignment(req, res);
+            await PenugasanAjudanController.deleteAssignment(req, res);
 
             expect(res.status).toHaveBeenCalledWith(404);
         });
@@ -287,7 +287,7 @@ describe('AjudanAssignmentController Unit Tests', () => {
             req.body = BODY;
             PimpinanAjudan.destroy.mockRejectedValue(new Error('Error'));
 
-            await AjudanAssignmentController.deleteAssignment(req, res);
+            await PenugasanAjudanController.deleteAssignment(req, res);
 
             expect(res.status).toHaveBeenCalledWith(500);
         });

@@ -12,7 +12,9 @@ class AuthController extends BaseController {
                 return this.sendResponse(res, 400, false, 'Nama, email, dan password wajib diisi');
             }
 
-            const existingUser = await User.findOne({ where: { email } });
+            const normalizedEmail = email.toLowerCase().trim();
+
+            const existingUser = await User.findOne({ where: { email: normalizedEmail } });
             if (existingUser) {
                 return this.sendResponse(res, 400, false, 'Email sudah terdaftar');
             }
@@ -33,7 +35,7 @@ class AuthController extends BaseController {
                 id_user: newId,
                 id_role: 'R008',
                 nama,
-                email,
+                email: normalizedEmail,
                 password: hashedPassword,
                 instansi: instansi || null,
                 jabatan: jabatan || null,
@@ -57,14 +59,16 @@ class AuthController extends BaseController {
     async login(req, res) {
         try {
             const { email, password } = req.body;
-            console.log('[Backend] Login attempt:', { email });
 
             if (!email || !password) {
                 return this.sendResponse(res, 400, false, 'Email dan password wajib diisi');
             }
 
+            const normalizedEmail = email.toLowerCase().trim();
+            console.log('[Backend] Login attempt:', { email: normalizedEmail });
+
             const user = await User.findOne({
-                where: { email },
+                where: { email: normalizedEmail },
                 include: [{
                     model: Role,
                     as: 'role',
@@ -130,7 +134,7 @@ class AuthController extends BaseController {
     async updateProfile(req, res) {
         try {
             const id_user = req.user.id_user;
-            const { nama, email, no_hp } = req.body;
+            const { nama, email, no_hp, jabatan, nip, instansi } = req.body;
 
             const user = await User.findByPk(id_user);
             if (!user) {
@@ -148,6 +152,22 @@ class AuthController extends BaseController {
             if (nama !== undefined) user.nama = nama;
             if (email !== undefined) user.email = email;
             if (no_hp !== undefined) user.no_hp = no_hp;
+
+            // Khusus Pemohon boleh mengubah jabatan, nip, dan instansi
+            if (req.user.nama_role === 'Pemohon') {
+                if (jabatan !== undefined) user.jabatan = jabatan;
+                if (instansi !== undefined) user.instansi = instansi;
+                if (nip !== undefined) {
+                    const normalizedNip = nip && nip.trim() !== '' ? nip.trim() : null;
+                    if (normalizedNip !== null && normalizedNip !== user.nip) {
+                        const existingNip = await User.findOne({ where: { nip: normalizedNip } });
+                        if (existingNip) {
+                            return this.sendResponse(res, 400, false, 'NIP sudah digunakan oleh akun lain');
+                        }
+                    }
+                    user.nip = normalizedNip;
+                }
+            }
 
             await user.save();
 
@@ -256,6 +276,7 @@ class AuthController extends BaseController {
             return this.sendError(res, error, 'DeleteFoto error');
         }
     }
+    
     async forgotPassword(req, res) {
         try {
             const { email } = req.body;

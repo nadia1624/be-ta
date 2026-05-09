@@ -304,7 +304,7 @@ class DashboardController extends BaseController {
                                 ORDER BY sa2."createdAt" DESC
                                 LIMIT 1
                             )
-                            AND sa1.status_agenda IN ('approved_sespri', 'approved_ajudan', 'delegated', 'completed')
+                            AND sa1.status_agenda IN ('approved_ajudan', 'delegated', 'completed')
                         )`)
                     }
                 },
@@ -550,7 +550,7 @@ class DashboardController extends BaseController {
                                 ORDER BY sa2."createdAt" DESC
                                 LIMIT 1
                             )
-                            AND sa1.status_agenda IN ('approved_sespri', 'approved_ajudan', 'delegated', 'completed', 'rejected_sespri', 'rejected_ajudan')
+                            AND sa1.status_agenda IN ('approved_ajudan', 'delegated', 'completed')
                         )`)
                     }
                 },

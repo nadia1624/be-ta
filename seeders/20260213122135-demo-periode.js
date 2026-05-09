@@ -6,10 +6,20 @@ module.exports = {
     await queryInterface.bulkInsert('Periodes', [
       {
         id_periode: 'PD001',
-        nama_periode: 'Periode 2024-2029',
-        tanggal_mulai: '2024-01-01',
-        tanggal_selesai: '2029-12-31',
-        keterangan: 'Periode jabatan pimpinan tahun 2024 sampai 2029',
+        nama_periode: 'Periode 2020-2025',
+        tanggal_mulai: '2020-02-27',
+        tanggal_selesai: '2025-02-27',
+        keterangan: 'Periode jabatan Walikota dan Wakil Walikota tahun 2020 sampai 2024',
+        status_periode: 'nonaktif',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      {
+        id_periode: 'PD002',
+        nama_periode: 'Periode 2025-2030',
+        tanggal_mulai: '2025-02-27',
+        tanggal_selesai: '2030-02-27',
+        keterangan: 'Periode jabatan Walikota dan Wakil Walikota tahun 2025 sampai 2030',
         status_periode: 'aktif',
         createdAt: new Date(),
         updatedAt: new Date()
