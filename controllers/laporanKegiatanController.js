@@ -22,11 +22,6 @@ class LaporanKegiatanController extends BaseController {
         return `LK${nextNum.toString().padStart(3, '0')}`;
     }
 
-    /**
-     * POST /api/laporan-kegiatan
-     * Staff submits a progress report for their assigned task.
-     * Accepts: id_penugasan, deskripsi_laporan, catatan_laporan, dokumentasi (file)
-     */
     async addLaporan(req, res) {
         const transaction = await sequelize.transaction();
         try {
@@ -89,7 +84,7 @@ class LaporanKegiatanController extends BaseController {
                 id_laporan,
                 id_penugasan,
                 id_user_staff: id_user,
-                deskripsi_laporan: deskripsi_laporan.slice(0, 50), // model has VARCHAR(50)
+                deskripsi_laporan: deskripsi_laporan.slice(0, 50),
                 catatan_laporan: catatan_laporan || null,
                 dokumentasi_laporan
             }, { transaction });
@@ -108,10 +103,6 @@ class LaporanKegiatanController extends BaseController {
         }
     }
 
-    /**
-     * GET /api/laporan-kegiatan/penugasan/:id_penugasan
-     * Get all progress reports for a specific penugasan.
-     */
     async getLaporanByPenugasan(req, res) {
         try {
             const { id_penugasan } = req.params;
@@ -142,10 +133,6 @@ class LaporanKegiatanController extends BaseController {
         }
     }
 
-    /**
-     * DELETE /api/laporan-kegiatan/:id_laporan
-     * Staff can delete their own laporan entry.
-     */
     async deleteLaporan(req, res) {
         try {
             const { id_laporan } = req.params;
@@ -159,7 +146,6 @@ class LaporanKegiatanController extends BaseController {
                 return this.sendResponse(res, 404, false, 'Laporan tidak ditemukan atau bukan milik Anda');
             }
 
-            // Delete the file if it exists
             if (laporan.dokumentasi_laporan) {
                 const filePath = path.join(__dirname, '../uploads/laporan', laporan.dokumentasi_laporan);
                 if (fs.existsSync(filePath)) {

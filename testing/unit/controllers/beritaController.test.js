@@ -243,7 +243,7 @@ describe('BeritaController Unit Tests', () => {
         test('5. Return 403 dan rollback jika submit sebelum tanggal agenda', async () => {
             req.body = BODY;
             const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setDate(tomorrow.getDate() + 5); // Menggunakan 5 hari ke depan agar kebal terhadap zona waktu
             Penugasan.findByPk.mockResolvedValue({
                 status: 'pending',
                 agenda: { tanggal_kegiatan: tomorrow.toISOString().split('T')[0] },

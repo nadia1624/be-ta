@@ -26,12 +26,12 @@ const upload = multer({
     storage,
     limits: { fileSize: 50 * 1024 * 1024 }, // Increase to 50MB limit
     fileFilter: (req, file, cb) => {
-        const allowed = ['.jpg', '.jpeg', '.png', '.mp4', '.mov', '.webm'];
+        const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
         const ext = path.extname(file.originalname).toLowerCase();
         if (allowed.includes(ext)) {
             cb(null, true);
         } else {
-            cb(new Error('Hanya file JPG, PNG, dan Video (MP4/MOV/WEBM) yang diizinkan'));
+            cb(new Error('Hanya file gambar (JPG, JPEG, PNG, WebP) yang diizinkan'));
         }
     }
 });

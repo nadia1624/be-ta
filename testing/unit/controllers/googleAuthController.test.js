@@ -2,15 +2,21 @@ jest.mock('../../../models', () => ({
     Pimpinan: {
         findByPk: jest.fn(),
     },
+    AgendaPimpinan: {
+        findAll: jest.fn().mockResolvedValue([]),
+    },
+    Agenda: {},
+    PeriodeJabatan: {},
 }));
 
 jest.mock('../../../helpers/googleCalendarHelper', () => ({
     getAuthUrl: jest.fn(),
     getTokens: jest.fn(),
+    syncEvent: jest.fn(),
 }));
 
 const GoogleAuthController = require('../../../controllers/googleAuthController');
-const { Pimpinan } = require('../../../models');
+const { Pimpinan, AgendaPimpinan } = require('../../../models');
 const googleCalendarHelper = require('../../../helpers/googleCalendarHelper');
 
 describe('GoogleAuthController Unit Tests', () => {
@@ -178,6 +184,41 @@ describe('GoogleAuthController Unit Tests', () => {
             await GoogleAuthController.handleCallback(req, res);
 
             expect(res.status).toHaveBeenCalledWith(500);
+        });
+
+        test('8. Auto-sync unsynced agendas on successful login', async () => {
+            req.query = { code: 'C1', state: 'P1' };
+            const mockTokens = { access_token: 'AT1' };
+            const mockPimpinan = { 
+                id_pimpinan: 'P1', 
+                nama_pimpinan: 'John Doe',
+                update: jest.fn().mockResolvedValue(true) 
+            };
+
+            const mockUnsyncedAgendas = [
+                {
+                    status_kehadiran: 'hadir',
+                    agenda: { id_agenda: 'A1' },
+                    update: jest.fn().mockResolvedValue(true)
+                },
+                {
+                    status_kehadiran: 'diwakilkan',
+                    agenda: { id_agenda: 'A2' },
+                    update: jest.fn().mockResolvedValue(true)
+                }
+            ];
+
+            googleCalendarHelper.getTokens.mockResolvedValue(mockTokens);
+            Pimpinan.findByPk.mockResolvedValue(mockPimpinan);
+            AgendaPimpinan.findAll.mockResolvedValue(mockUnsyncedAgendas);
+            googleCalendarHelper.syncEvent.mockResolvedValue('GEVENT_ID_123');
+
+            await GoogleAuthController.handleCallback(req, res);
+
+            expect(AgendaPimpinan.findAll).toHaveBeenCalled();
+            expect(googleCalendarHelper.syncEvent).toHaveBeenCalledTimes(2);
+            expect(mockUnsyncedAgendas[0].update).toHaveBeenCalledWith({ google_event_id: 'GEVENT_ID_123' });
+            expect(mockUnsyncedAgendas[1].update).toHaveBeenCalledWith({ google_event_id: 'GEVENT_ID_123' });
         });
     });
 

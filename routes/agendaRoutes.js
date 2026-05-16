@@ -18,11 +18,29 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
+    limits: { fileSize: 20 * 1024 * 1024 } // 20MB
 });
 
-router.post('/', authenticateToken, upload.single('surat_permohonan'), agendaController.createAgenda);
-router.put('/:id_agenda', authenticateToken, upload.single('surat_permohonan'), agendaController.updateAgenda);
+// Wrapper middleware to handle Multer errors
+const uploadMiddleware = (req, res, next) => {
+    const uploadSingle = upload.single('surat_permohonan');
+    
+    uploadSingle(req, res, (err) => {
+        if (err instanceof multer.MulterError) {
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({ success: false, message: 'Ukuran file surat permohonan terlalu besar. Maksimal 20MB' });
+            }
+            return res.status(400).json({ success: false, message: `Error upload: ${err.message}` });
+        } else if (err) {
+            return res.status(400).json({ success: false, message: err.message });
+        }
+        // Everything went fine.
+        next();
+    });
+};
+
+router.post('/', authenticateToken, uploadMiddleware, agendaController.createAgenda);
+router.put('/:id_agenda', authenticateToken, uploadMiddleware, agendaController.updateAgenda);
 router.get('/my', authenticateToken, agendaController.getMyAgendas);
 router.get('/slots', authenticateToken, agendaController.getSlots);
 router.post('/:id_agenda/cancel', authenticateToken, agendaController.cancelAgenda);

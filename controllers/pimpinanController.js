@@ -4,9 +4,7 @@ const emailHelper = require('../helpers/emailHelper');
 const googleCalendarHelper = require('../helpers/googleCalendarHelper');
 
 class PimpinanController extends BaseController {
-    /**
-     * Helper to generate ID
-     */
+
     async generateId() {
         const list = await Pimpinan.findAll({ attributes: ['id_pimpinan'] });
         let max = 0;
@@ -132,7 +130,6 @@ class PimpinanController extends BaseController {
                     await emailHelper.sendSyncInvitation(pimpinan, authUrl);
                 } catch (emailError) {
                     console.error('Failed to send sync invitation:', emailError);
-                    // Don't fail the whole request just because email failed
                 }
             }
 

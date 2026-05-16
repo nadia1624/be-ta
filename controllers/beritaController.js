@@ -3,9 +3,7 @@ const { DraftBerita, DokumentasiBerita, User, Penugasan, Agenda, AgendaPimpinan,
 const { sendPushNotification } = require('../helpers/pushNotificationHelper');
 
 class BeritaController extends BaseController {
-    /**
-     * Get approved berita for public landing page (no auth required)
-     */
+
     async getPublicBerita(req, res) {
         try {
             const page = parseInt(req.query.page) || 1;
@@ -40,9 +38,6 @@ class BeritaController extends BaseController {
         }
     }
 
-    /**
-     * Get approved berita detail for public page
-     */
     async getPublicBeritaDetail(req, res) {
         try {
             const { id } = req.params;
@@ -71,9 +66,6 @@ class BeritaController extends BaseController {
         }
     }
 
-    /**
-     * Helper to generate Draft Berita ID
-     */
     async generateDraftId() {
         const lastDraft = await DraftBerita.findOne({
             order: [['id_draft_berita', 'DESC']],
@@ -89,9 +81,6 @@ class BeritaController extends BaseController {
         return `DB${nextNum.toString().padStart(3, '0')}`;
     }
 
-    /**
-     * Helper to generate Dokumentasi ID
-     */
     async generateDokumentasiId() {
         const lastDok = await DokumentasiBerita.findOne({
             order: [['id_dokumentasi', 'DESC']],
@@ -106,10 +95,6 @@ class BeritaController extends BaseController {
 
         return `DK${nextNum.toString().padStart(3, '0')}`;
     }
-
-    /**
-     * Helper to generate Revisi ID
-     */
     async generateRevisiId() {
         const lastRev = await RevisiDraftBerita.findOne({
             order: [['id_revisi', 'DESC']],
@@ -125,9 +110,6 @@ class BeritaController extends BaseController {
         return `REV${nextNum.toString().padStart(3, '0')}`;
     }
 
-    /**
-     * Submit draft berita (Staff Media)
-     */
     async submitDraftBerita(req, res) {
         const transaction = await sequelize.transaction();
         try {

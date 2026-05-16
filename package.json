@@ -6,7 +6,11 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "cross-env NODE_ENV=test jest"
+    "test:unit": "cross-env NODE_ENV=test jest --config=jest.config.unit.js",
+    "test:unit:coverage": "cross-env NODE_ENV=test jest --config=jest.config.unit.js --coverage",
+    "db:prepare": "node scripts/createTestDb.js && cross-env NODE_ENV=test sequelize-cli db:migrate",
+    "test:integration": "npm run db:prepare && cross-env NODE_ENV=test jest --config=jest.config.integration.js --runInBand",
+    "test": "npm run test:unit && npm run test:integration"
   },
   "repository": {
     "type": "git",

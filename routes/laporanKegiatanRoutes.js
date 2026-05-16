@@ -36,12 +36,31 @@ const upload = multer({
     }
 });
 
+// Wrapper middleware to handle Multer errors
+const uploadMiddleware = (req, res, next) => {
+    const uploadSingle = upload.single('dokumentasi');
+    
+    uploadSingle(req, res, (err) => {
+        if (err instanceof multer.MulterError) {
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({ success: false, message: 'Ukuran file terlalu besar. Maksimal 20MB' });
+            }
+            return res.status(400).json({ success: false, message: `Error upload: ${err.message}` });
+        } else if (err) {
+            // Ini menangani error kustom dari fileFilter
+            return res.status(400).json({ success: false, message: err.message });
+        }
+        // Everything went fine.
+        next();
+    });
+};
+
 // Add laporan progress (Staff Protokol only)
 router.post(
     '/',
     authenticateToken,
     authorizeRoles('Staff Protokol'),
-    upload.single('dokumentasi'),
+    uploadMiddleware,
     laporanKegiatanController.addLaporan
 );
 

@@ -5,9 +5,6 @@ const googleCalendarHelper = require('../helpers/googleCalendarHelper');
 require('dotenv').config();
 
 class GoogleAuthController extends BaseController {
-    /**
-     * Redirect to Google OAuth
-     */
     async initiateAuth(req, res) {
         try {
             const { id_pimpinan } = req.params;
@@ -18,8 +15,6 @@ class GoogleAuthController extends BaseController {
             }
 
             const authUrl = googleCalendarHelper.getAuthUrl(id_pimpinan);
-            // In a real API, we might return the URL or redirect
-            // Since this is called from an email link mostly, we redirect
             return res.redirect(authUrl);
         } catch (error) {
             return this.sendError(res, error, 'Gagal inisialisasi Google Auth');
@@ -84,9 +79,7 @@ class GoogleAuthController extends BaseController {
             } catch (syncError) {
                 console.error('[Google Auth] Auto-sync failed:', syncError);
             }
-            // --------------------------------
 
-            // Redirect back to frontend success page
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
             return res.redirect(`${frontendUrl}/google-auth-success?nama=${encodeURIComponent(pimpinan.nama_pimpinan)}`);
         } catch (error) {
@@ -94,10 +87,7 @@ class GoogleAuthController extends BaseController {
             return res.status(500).send('Gagal memproses sinkronisasi Google Calendar');
         }
     }
-    
-    /**
-     * Public route to get direct link (for testing or manual sync)
-     */
+
     async getAuthUrl(req, res) {
         try {
             const { id_pimpinan } = req.params;

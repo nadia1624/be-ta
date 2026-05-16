@@ -80,11 +80,19 @@ class PenugasanController extends BaseController {
 
     async getAgendasForAssignment(req, res) {
         try {
-            // Agenda eligible for assignment:
-            // 1. At least one AgendaPimpinan has status_kehadiran = 'hadir' or 'diwakilkan'
-            // 2. No Penugasan (protokol) exists yet for this agenda
+            const today = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0];
+            const { scheduleStatus } = req.query; // 'upcoming' or 'past'
+
+            let dateCondition = {};
+            if (scheduleStatus === 'upcoming') {
+                dateCondition = { tanggal_kegiatan: { [Op.gte]: today } };
+            } else if (scheduleStatus === 'past') {
+                dateCondition = { tanggal_kegiatan: { [Op.lt]: today } };
+            }
+
             const agendas = await Agenda.findAll({
                 where: {
+                    ...dateCondition,
                     id_agenda: {
                         // Must have at least one confirmed pimpinan (hadir or diwakilkan)
                         [Op.in]: sequelize.literal(`(
@@ -145,11 +153,19 @@ class PenugasanController extends BaseController {
 
     async getAgendasForMediaAssignment(req, res) {
         try {
-            // Agenda eligible for assignment:
-            // 1. At least one AgendaPimpinan has status_kehadiran = 'hadir' or 'diwakilkan'
-            // 2. No Penugasan (media) exists yet for this agenda
+            const today = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0];
+            const { scheduleStatus } = req.query; // 'upcoming' or 'past'
+
+            let dateCondition = {};
+            if (scheduleStatus === 'upcoming') {
+                dateCondition = { tanggal_kegiatan: { [Op.gte]: today } };
+            } else if (scheduleStatus === 'past') {
+                dateCondition = { tanggal_kegiatan: { [Op.lt]: today } };
+            }
+
             const agendas = await Agenda.findAll({
                 where: {
+                    ...dateCondition,
                     id_agenda: {
                         // Must have at least one confirmed pimpinan (hadir or diwakilkan)
                         [Op.in]: sequelize.literal(`(
@@ -364,8 +380,17 @@ class PenugasanController extends BaseController {
     async getMyPenugasan(req, res) {
         try {
             const { id_user, nama_role } = req.user;
+            const { scheduleStatus } = req.query; // 'upcoming' or 'past'
             const isMedia = nama_role === 'Kasubag Media' || nama_role === 'Staff Media' || nama_role === 'Staf Media';
             const isStaff = nama_role === 'Staff Protokol' || nama_role === 'Staf Protokol' || nama_role === 'Staff Media' || nama_role === 'Staf Media';
+
+            const today = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0];
+            let dateCondition = {};
+            if (scheduleStatus === 'upcoming') {
+                dateCondition = { tanggal_kegiatan: { [Op.gte]: today } };
+            } else if (scheduleStatus === 'past') {
+                dateCondition = { tanggal_kegiatan: { [Op.lt]: today } };
+            }
 
             let whereClause = { 
                 jenis_penugasan: isMedia ? 'media' : 'protokol' 
@@ -390,6 +415,7 @@ class PenugasanController extends BaseController {
                     {
                         model: Agenda,
                         as: 'agenda',
+                        where: dateCondition,
                         attributes: ['id_agenda', 'nama_kegiatan', 'tanggal_kegiatan', 'waktu_mulai', 'waktu_selesai', 'lokasi_kegiatan', 'contact_person', 'keterangan'],
                         include: [
                             {
@@ -498,8 +524,6 @@ class PenugasanController extends BaseController {
             const isStaffProtokol = nama_role === 'Staff Protokol' || nama_role === 'Staf Protokol';
 
             let whereClause = { id_penugasan: id };
-            // Original logic restricted non-staff to their own created assignments.
-            // We relax this for monitoring roles.
             if (!isStaffProtokol && !isMonitoringRole) {
                 whereClause.id_user_kasubag = id_user;
             }
@@ -574,19 +598,15 @@ class PenugasanController extends BaseController {
                 return this.sendResponse(res, 404, false, 'Penugasan tidak ditemukan');
             }
 
-            // Access control check
             if (isMonitoringRole) {
-                // Monitoring roles can view protocol assignments
                 if (penugasan.jenis_penugasan !== 'protokol' && penugasan.id_user_kasubag !== id_user) {
                     return this.sendResponse(res, 403, false, 'Anda tidak memiliki akses ke penugasan ini');
                 }
             } else if (isStaffProtokol) {
-                // Staff Protokol can see all protocol assignments
                 if (penugasan.jenis_penugasan !== 'protokol') {
                     return this.sendResponse(res, 403, false, 'Anda tidak memiliki akses ke penugasan ini');
                 }
             } else {
-                // Other Kasubags (e.g. Kasubag Protokol) can only see what they created
                 if (penugasan.id_user_kasubag !== id_user) {
                     return this.sendResponse(res, 403, false, 'Anda tidak memiliki akses ke penugasan ini');
                 }
@@ -601,18 +621,15 @@ class PenugasanController extends BaseController {
             } else if (plain.status === 'progress') {
                 status_pelaksanaan = 'Berlangsung';
             } else {
-                // null or 'pending'
                 status_pelaksanaan = 'Belum Dimulai';
             }
 
-            // Collect unique staff
             const staffMap = {};
             (plain.slotAgendaStaffs || []).forEach(s => {
                 if (s.staff) staffMap[s.staff.id_user] = s.staff;
             });
             const nama_staf = Object.values(staffMap).map(s => s.nama);
 
-            // Support multiple pimpinans
             const pimpinans = (plain.agenda?.agendaPimpinans || []).map(ap => ({
                 nama_pimpinan: ap.periodeJabatan?.pimpinan?.nama_pimpinan || '-',
                 nama_jabatan: ap.periodeJabatan?.jabatan?.nama_jabatan || '-',
@@ -659,13 +676,12 @@ class PenugasanController extends BaseController {
 
             await penugasan.update({ status }, { transaction });
 
-            // If status is 'selesai', sync to StatusAgenda
             if (status === 'selesai' && penugasan.id_agenda) {
                 const id_status_agenda = await this.generateStatusAgendaId(transaction);
                 await StatusAgenda.create({
                     id_status_agenda,
                     id_agenda: penugasan.id_agenda,
-                    id_user_sespri: id_user_auth, // Current actor ID
+                    id_user_sespri: id_user_auth,
                     status_agenda: 'completed',
                     tanggal_status: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' }).split(' ')[0],
                     catatan: `Agenda sudah selesai dilakukan.`

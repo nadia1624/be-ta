@@ -2,9 +2,7 @@ const BaseController = require('./BaseController');
 const { KASKPD, KASKPDPendamping } = require('../models');
 
 class KASKPDController extends BaseController {
-    /**
-     * Get all KASKPD
-     */
+
     async getAll(req, res) {
         try {
             const data = await KASKPD.findAll({
@@ -16,20 +14,14 @@ class KASKPDController extends BaseController {
         }
     }
 
-    /**
-     * Create new KASKPD
-     */
     async create(req, res) {
         try {
             const { nama_instansi } = req.body;
             let { id_ka_skpd } = req.body;
 
-            // Simple validation
             if (!nama_instansi) {
                 return this.sendResponse(res, 400, false, 'Nama instansi harus diisi');
             }
-
-            // Auto-generate ID if not provided
             if (!id_ka_skpd) {
                 const existing = await KASKPD.findAll({
                     attributes: ['id_ka_skpd']
@@ -48,7 +40,6 @@ class KASKPDController extends BaseController {
                 id_ka_skpd = `KS${nextNumber.toString().padStart(3, '0')}`;
             }
 
-            // Check if ID already exists
             const check = await KASKPD.findByPk(id_ka_skpd);
             if (check) {
                 return this.sendResponse(res, 400, false, `ID KaSKPD ${id_ka_skpd} sudah ada`);
@@ -65,9 +56,6 @@ class KASKPDController extends BaseController {
         }
     }
 
-    /**
-     * Update KASKPD
-     */
     async update(req, res) {
         try {
             const { id } = req.params;
@@ -88,9 +76,6 @@ class KASKPDController extends BaseController {
         }
     }
 
-    /**
-     * Delete KASKPD
-     */
     async delete(req, res) {
         try {
             const { id } = req.params;
@@ -100,7 +85,6 @@ class KASKPDController extends BaseController {
                 return this.sendResponse(res, 404, false, 'KaSKPD tidak ditemukan');
             }
 
-            // Check for associations before deleting
             const isUsed = await KASKPDPendamping.findOne({
                 where: { id_ka_skpd: id }
             });

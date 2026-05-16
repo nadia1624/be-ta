@@ -2,7 +2,6 @@ const BaseController = require('./BaseController');
 const { NotificationSubscription } = require('../models');
 
 class NotificationController extends BaseController {
-  // Save or update subscription
   async subscribe(req, res) {
     try {
       const { endpoint, keys } = req.body;
@@ -12,19 +11,16 @@ class NotificationController extends BaseController {
         return this.sendResponse(res, 400, false, 'Invalid subscription object');
       }
 
-      // Check if this endpoint already exists for this user
       let subscription = await NotificationSubscription.findOne({
         where: { endpoint }
       });
 
       if (subscription) {
-        // Update user if device was previously subscribed to another user
         subscription.id_user = id_user;
         subscription.p256dh = keys.p256dh;
         subscription.auth = keys.auth;
         await subscription.save();
       } else {
-        // Create new
         subscription = await NotificationSubscription.create({
           id_user,
           endpoint,
@@ -39,7 +35,6 @@ class NotificationController extends BaseController {
     }
   }
 
-  // Remove subscription (typically on logout)
   async unsubscribe(req, res) {
     try {
       const { endpoint } = req.body;

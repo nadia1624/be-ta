@@ -57,8 +57,7 @@ class UserController extends BaseController {
         try {
             const { 
                 nama, email, password, role_id, nip, no_hp, 
-                status_aktif, instansi, alamat, jabatan,
-                id_jabatan_ajudan, id_periode_ajudan, keterangan_ajudan 
+                status_aktif, instansi, alamat, jabatan 
             } = req.body;
 
             // Normalize email & NIP
@@ -106,8 +105,7 @@ class UserController extends BaseController {
             
             const { 
                 nama, email, password, role_id, nip, no_hp, 
-                status_aktif, instansi, alamat, jabatan,
-                id_jabatan_ajudan, id_periode_ajudan 
+                status_aktif, instansi, alamat, jabatan
             } = req.body;
 
             const user = await User.findByPk(id_user);

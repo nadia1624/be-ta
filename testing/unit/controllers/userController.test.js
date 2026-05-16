@@ -295,6 +295,32 @@ describe('UserController Unit Tests', () => {
             await UserController.updateUser(req, res);
             expect(errorSpy).toHaveBeenCalledWith(res, error, expect.any(String));
         });
+
+        test('6. Return 400 jika email sudah digunakan oleh akun lain', async () => {
+            req.params = { id: 'U1' };
+            req.body = { email: 'exist@mail.com' };
+            const u = { id_user: 'U1', save: jest.fn() };
+            User.findByPk.mockResolvedValue(u);
+            User.findOne.mockResolvedValue({ id_user: 'U2', email: 'exist@mail.com' });
+
+            await UserController.updateUser(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(responseSpy).toHaveBeenCalledWith(res, 400, false, 'Email sudah digunakan oleh akun lain');
+        });
+
+        test('7. Return 400 jika NIP sudah digunakan oleh akun lain', async () => {
+            req.params = { id: 'U1' };
+            req.body = { nip: '12345' };
+            const u = { id_user: 'U1', save: jest.fn() };
+            User.findByPk.mockResolvedValue(u);
+            User.findOne.mockResolvedValue({ id_user: 'U2', nip: '12345' }); // Hanya dipanggil sekali karena email kosong
+
+            await UserController.updateUser(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(responseSpy).toHaveBeenCalledWith(res, 400, false, 'NIP sudah digunakan oleh akun lain');
+        });
     });
 
     describe('5. deleteUser()', () => {

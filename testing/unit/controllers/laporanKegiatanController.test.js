@@ -138,7 +138,7 @@ describe('LaporanKegiatanController Unit Tests', () => {
 
         test('5. Return 403 jika hari ini < tanggal agenda', async () => {
             const futureDate = new Date();
-            futureDate.setDate(futureDate.getDate() + 1);
+            futureDate.setDate(futureDate.getDate() + 5); // Menggunakan 5 hari ke depan agar kebal terhadap zona waktu
             const agendaDate = futureDate.toISOString().split('T')[0];
 
             req.body = { id_penugasan: 'PN1', deskripsi_laporan: 'D1' };
