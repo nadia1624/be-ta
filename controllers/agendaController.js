@@ -219,7 +219,6 @@ class AgendaController extends BaseController {
         }
     }
 
-
     async getMyAgendas(req, res) {
         try {
             const id_user_pemohon = req.user.id_user;
@@ -383,12 +382,10 @@ class AgendaController extends BaseController {
                 catatan: catatan || `Status diperbarui oleh Sespri via verifikasi: ${status}`
             }, { transaction });
 
-            // Touch Agenda record to update its updatedAt timestamp for activity-based sorting
             await agenda.update({ updatedAt: new Date() }, { transaction });
 
             await transaction.commit();
 
-            // Notify Pemohon about the status update
             if (agenda.id_user_pemohon) {
                 const statusLabels = {
                     'approved_sespri': 'Disetujui Sespri',
@@ -414,7 +411,6 @@ class AgendaController extends BaseController {
                 });
             }
 
-            // 4. Handle Google Calendar Deletion if agenda is canceled or rejected
             if (['rejected_sespri', 'rejected_ajudan', 'canceled'].includes(status)) {
                 try {
                     const agendaPimpinans = await AgendaPimpinan.findAll({
@@ -456,16 +452,13 @@ class AgendaController extends BaseController {
                 }
             }
 
-            // 5. Notify Ajudan if status is approved_sespri
             if (status === 'approved_sespri') {
                 try {
-                    // Find all Pimpinan associated with this agenda
                     const agendaPimpinans = await AgendaPimpinan.findAll({
                         where: { id_agenda }
                     });
 
                     if (agendaPimpinans.length > 0) {
-                        // Find all Ajudans assigned to these Pimpinans
                         const pimpinanCriteria = agendaPimpinans.map(ap => ({
                             id_jabatan: ap.id_jabatan,
                             id_periode: ap.id_periode
@@ -477,7 +470,6 @@ class AgendaController extends BaseController {
                             }
                         });
 
-                        // Send notifications to each unique Ajudan
                         const uniqueAjudanIds = [...new Set(pimpinanAjudans.map(pa => pa.id_user_ajudan))];
                         
                         const ajudanNotificationPayload = {
@@ -564,13 +556,10 @@ class AgendaController extends BaseController {
                 }
             }
             
-            // Validate tanggal_kegiatan if provided
             if (tanggal_kegiatan && tanggal_kegiatan <= todayStr) {
                 await transaction.rollback();
                 return this.sendResponse(res, 400, false, 'Tanggal kegiatan harus setelah hari ini (minimal besok)');
             }
-
-            // Validate time range if both provided, or if one is provided use the existing one from the record
             const finalStart = waktu_mulai || agenda.waktu_mulai;
             const finalEnd = waktu_selesai || agenda.waktu_selesai;
 
@@ -600,8 +589,6 @@ class AgendaController extends BaseController {
             if (surat_permohonan) updateData.surat_permohonan = surat_permohonan;
 
             await agenda.update(updateData, { transaction });
-
-            // Handle KASKPD Pendamping if Sespri
             if (req.user.nama_role === 'Sespri' && kaskpd_pendamping !== undefined) {
                 let pendampingIds = kaskpd_pendamping;
                 if (typeof kaskpd_pendamping === 'string') {
@@ -613,13 +600,10 @@ class AgendaController extends BaseController {
                 }
 
                 if (Array.isArray(pendampingIds)) {
-                    // Clear existing
                     await KASKPDPendamping.destroy({
                         where: { id_agenda },
                         transaction
                     });
-
-                    // Create new
                     if (pendampingIds.length > 0) {
                         const pendampingPromises = pendampingIds.map(id_ka_skpd => 
                             KASKPDPendamping.create({
@@ -632,7 +616,6 @@ class AgendaController extends BaseController {
                 }
             }
 
-            // 4. Background Sync for all confirmed Pimpinans
             try {
                 const confirmedAP = await AgendaPimpinan.findAll({
                     where: { id_agenda: agenda.id_agenda, google_event_id: { [Op.ne]: null } },
@@ -651,7 +634,6 @@ class AgendaController extends BaseController {
                     if (ap.status_kehadiran === 'hadir') {
                         pimpinanToSync = ap.periodeJabatan?.pimpinan;
                     } else if (ap.status_kehadiran === 'diwakilkan') {
-                        // Find the representative from SlotAgendaPimpinan
                         const slot = await SlotAgendaPimpinan.findOne({
                             where: { id_agenda: agenda.id_agenda, id_jabatan_hadir: ap.id_jabatan, id_periode_hadir: ap.id_periode },
                             include: [{ 
@@ -675,8 +657,6 @@ class AgendaController extends BaseController {
                 console.error('[Update Sync] Error updating calendars:', syncError);
             }
 
-            // Create new status record: back to pending after revision edit
-            // Only role pemohon triggers this
             if (req.user.nama_role !== 'Sespri') {
                 const id_status_agenda = await this.generateStatusAgendaId(transaction);
                 await StatusAgenda.create({
@@ -688,13 +668,11 @@ class AgendaController extends BaseController {
                     catatan: 'Permohonan telah direvisi oleh pemohon'
                 }, { transaction });
 
-                // Touch Agenda record for activity-based sorting
                 await agenda.update({ updatedAt: new Date() }, { transaction });
             }
 
             await transaction.commit();
 
-            // Reload agenda with all includes to ensure frontend gets updated associations (like KASKPD)
             const updatedAgenda = await Agenda.findByPk(id_agenda, {
                 include: [
                     {
@@ -759,7 +737,6 @@ class AgendaController extends BaseController {
             const agendaWhere = { ...whereClause };
             let pimpinanFilter = null;
 
-            // If Ajudan, restrict to their assigned leaders
             if (nama_role === 'Ajudan') {
                 const { PimpinanAjudan } = require('../models');
                 const assignments = await PimpinanAjudan.findAll({
@@ -899,7 +876,6 @@ class AgendaController extends BaseController {
             const { id_agenda, id_jabatan, id_periode } = req.params;
             const { nama_role, id_user } = req.user;
 
-            // Security Check: If Ajudan, verify they are assigned to this leader
             if (nama_role === 'Ajudan') {
                 const assignment = await PimpinanAjudan.findOne({
                     where: { 
@@ -931,7 +907,6 @@ class AgendaController extends BaseController {
 
             const agenda = agendaPimpinan.agenda;
 
-            // Check if agenda has passed
             const now = new Date();
             const agendaEnd = new Date(`${agenda.tanggal_kegiatan}T${agenda.waktu_selesai}+07:00`);
             if (agendaEnd < now) {
@@ -944,7 +919,6 @@ class AgendaController extends BaseController {
             let finalJabatanPerwakilan = '-';
             let originalPimpinanObj = null;
 
-            // Fetch original Pimpinan details
             const origPimpinan = await PeriodeJabatan.findOne({
                 where: { id_jabatan, id_periode },
                 include: [{ model: Pimpinan, as: 'pimpinan' }, { model: JabatanPimpinan, as: 'jabatan' }],
@@ -954,7 +928,6 @@ class AgendaController extends BaseController {
                originalPimpinanObj = origPimpinan;
             }
 
-            // If represented by another leader in the system, fetch their name
             if (status_kehadiran === 'diwakilkan' && id_jabatan_perwakilan) {
                 const repPimpinan = await PeriodeJabatan.findOne({
                     where: { id_jabatan: id_jabatan_perwakilan, id_periode: id_periode_perwakilan },
@@ -964,7 +937,6 @@ class AgendaController extends BaseController {
                 if (repPimpinan && repPimpinan.pimpinan) {
                     finalNamaPerwakilan = repPimpinan.pimpinan.nama_pimpinan;
 
-                    // VALIDATION: Check if the representative is already invited to this agenda
                     const alreadyInvited = await AgendaPimpinan.findOne({
                         where: {
                             id_agenda,
@@ -981,7 +953,6 @@ class AgendaController extends BaseController {
                 }
             }
             
-            // PRE-CLEANUP: Identify if previously delegated to someone in the system
             let previousRepresentative = null;
             if (agendaPimpinan.status_kehadiran === 'diwakilkan' && agendaPimpinan.google_event_id) {
                 const prevSlot = await SlotAgendaPimpinan.findOne({
@@ -1004,15 +975,12 @@ class AgendaController extends BaseController {
                 }
             }
 
-            // 1. Update AgendaPimpinan
             await agendaPimpinan.update({
                 status_kehadiran,
                 nama_perwakilan: status_kehadiran === 'diwakilkan' ? finalNamaPerwakilan : null,
                 keterangan
             }, { transaction });
 
-            // 2. Manage SlotAgendaPimpinan
-            // Remove existing slots for this agenda and THIS SPECIFIC proposed leader
             await SlotAgendaPimpinan.destroy({
                 where: {
                     id_agenda,
@@ -1022,12 +990,9 @@ class AgendaController extends BaseController {
                 transaction
             });
 
-            // If hadir or diwakilkan by another leader, create new slot records
             if (status_kehadiran === 'hadir' || (status_kehadiran === 'diwakilkan' && id_jabatan_perwakilan)) {
                 const actualJabatan = status_kehadiran === 'hadir' ? id_jabatan : id_jabatan_perwakilan;
                 const actualPeriode = status_kehadiran === 'hadir' ? id_periode : id_periode_perwakilan;
-
-                // Overlap condition: slot overlaps agenda if slot_start < agenda_end AND slot_end > agenda_start
                 const slots = await SlotWaktu.findAll({
                     where: {
                         slot_waktu_mulai: { [Op.lt]: agendaPimpinan.agenda.waktu_selesai },
@@ -1037,7 +1002,7 @@ class AgendaController extends BaseController {
                     transaction
                 });
  
-                // === CONFLICT CHECK: Check if the actual attending pimpinan already has slots on the same date & overlapping time for a DIFFERENT agenda ===
+                // === CONFLICT CHECK ===
                 if (slots.length > 0) {
                     const conflictingSlots = await SlotAgendaPimpinan.findAll({
                         where: {
@@ -1057,7 +1022,6 @@ class AgendaController extends BaseController {
                     });
 
                     if (conflictingSlots.length > 0) {
-                        // Get the conflicting pimpinan name
                         const conflictingPimpinan = await PeriodeJabatan.findOne({
                             where: { id_jabatan: actualJabatan, id_periode: actualPeriode },
                             include: [
@@ -1070,7 +1034,6 @@ class AgendaController extends BaseController {
                         const pimpinanName = conflictingPimpinan?.pimpinan?.nama_pimpinan || 'Pimpinan';
                         const jabatanName = conflictingPimpinan?.jabatan?.nama_jabatan || '';
                         
-                        // Collect unique conflicting agenda names
                         const conflictingAgendaNames = [...new Set(conflictingSlots
                             .map(cs => cs.agenda?.nama_kegiatan)
                             .filter(Boolean)
@@ -1087,7 +1050,6 @@ class AgendaController extends BaseController {
                         );
                     }
                 }
-                // === END CONFLICT CHECK ===
 
                 for (const slot of slots) {
                     const existingSlot = await SlotAgendaPimpinan.findOne({
@@ -1122,7 +1084,6 @@ class AgendaController extends BaseController {
                 }
             }
 
-            // === STAFF CLEANUP: If no more leaders are attending this agenda, remove staff assignments ===
             const remainingPimpinanSlotsCount = await SlotAgendaPimpinan.count({
                 where: { id_agenda },
                 transaction
@@ -1137,22 +1098,17 @@ class AgendaController extends BaseController {
                 if (penugasans.length > 0) {
                     const penugasanIds = penugasans.map(p => p.id_penugasan);
                     
-                    // Delete staff slots
                     await SlotAgendaStaff.destroy({
                         where: { id_penugasan: { [Op.in]: penugasanIds } },
                         transaction
                     });
-
-                    // Delete penugasan
                     await Penugasan.destroy({
                         where: { id_agenda },
                         transaction
                     });
                 }
             }
-            // === END STAFF CLEANUP ===
 
-            // 3. Auto-update StatusAgenda
             let newOverallStatus = null;
             if (status_kehadiran === 'hadir') newOverallStatus = 'approved_ajudan';
             else if (status_kehadiran === 'diwakilkan') newOverallStatus = 'delegated';
@@ -1176,13 +1132,11 @@ class AgendaController extends BaseController {
                     catatan: catatanVal
                 }, { transaction });
 
-                // Touch Agenda record to update its updatedAt timestamp for activity-based sorting
                 await Agenda.update({ updatedAt: new Date() }, { where: { id_agenda }, transaction });
             }
 
             await transaction.commit();
 
-            // 4. Notify Kasubag and Sespri (Post-Commit)
             if (status_kehadiran === 'hadir' || status_kehadiran === 'diwakilkan') {
                 try {
                     const { Role } = require('../models');

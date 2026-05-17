@@ -3,13 +3,9 @@ require('dotenv').config();
 
 class GoogleCalendarHelper {
     constructor(oauth2Client = null) {
-        // Delaying initialization if no client provided to ensure factory is available
         this._oauth2Client = oauth2Client;
     }
 
-    /**
-     * Getter for oauth2Client to ensure it's initialized
-     */
     get oauth2Client() {
         if (!this._oauth2Client) {
             this._oauth2Client = this._createOAuth2Client();
@@ -21,16 +17,10 @@ class GoogleCalendarHelper {
         this._oauth2Client = client;
     }
 
-    /**
-     * Set a custom OAuth2 client (useful for testing)
-     */
     setOAuth2Client(client) {
         this.oauth2Client = client;
     }
 
-    /**
-     * Factory to create OAuth2 Client
-     */
     _createOAuth2Client() {
         return new google.auth.OAuth2(
             process.env.GOOGLE_CLIENT_ID,
@@ -39,11 +29,7 @@ class GoogleCalendarHelper {
         );
     }
 
-    /**
-     * Internal helper to get authenticated client
-     */
     _getAuth(pimpinan) {
-        // We create a new instance to avoid state leakage between concurrent requests
         const auth = this._createOAuth2Client();
 
         auth.setCredentials({
@@ -58,9 +44,6 @@ class GoogleCalendarHelper {
     /**
      * Generate Auth URL for Pimpinan
      */
-    /**
-     * Get Auth URL
-     */
     getAuthUrl(id_pimpinan) {
         const url = this.oauth2Client.generateAuthUrl({
             access_type: 'offline', // Required for refresh token
@@ -72,17 +55,11 @@ class GoogleCalendarHelper {
         return url;
     }
 
-    /**
-     * Exchange code for tokens
-     */
     async getTokens(code) {
         const { tokens } = await this.oauth2Client.getToken(code);
         return tokens;
     }
 
-    /**
-     * Create or Update Calendar Event
-     */
     async syncEvent(pimpinan, agenda, existingEventId = null, titlePrefix = '') {
         try {
             console.log(`[Google Sync] Starting sync for Pimpinan: ${pimpinan.nama_pimpinan} (${pimpinan.id_pimpinan})`);
@@ -95,12 +72,10 @@ class GoogleCalendarHelper {
             const auth = this._getAuth(pimpinan);
             const calendar = google.calendar({ version: 'v3', auth });
 
-            // Robust Date Parsing
             let dateStr = '';
             if (typeof agenda.tanggal_kegiatan === 'string') {
-                // If it's already YYYY-MM-DD or similar, try to extract just the date part
                 dateStr = agenda.tanggal_kegiatan.includes('T') ? agenda.tanggal_kegiatan.split('T')[0] : agenda.tanggal_kegiatan;
-                // If it contains space (Postgres format), split by space
+                
                 dateStr = dateStr.includes(' ') ? dateStr.split(' ')[0] : dateStr;
             } else {
                 // Handle Date object

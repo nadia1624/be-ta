@@ -6,7 +6,7 @@ class EmailHelper {
         this.transporter = nodemailer.createTransport({
             host: process.env.SMTP_HOST || 'smtp.gmail.com',
             port: process.env.SMTP_PORT || 587,
-            secure: false, // true for 465, false for other ports
+            secure: false, 
             auth: {
                 user: process.env.SMTP_USER,
                 pass: process.env.SMTP_PASS,
@@ -14,9 +14,6 @@ class EmailHelper {
         });
     }
 
-    /**
-     * Send Sync Invitation Email to Pimpinan
-     */
     async sendSyncInvitation(pimpinan, authUrl) {
         const mailOptions = {
             from: `"SIMAP Admin" <${process.env.SMTP_USER}>`,

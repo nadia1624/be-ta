@@ -86,6 +86,7 @@ describe('PenugasanController Unit Tests', () => {
         req = {
             body: {},
             params: {},
+            query: {},
             user: { id_user: 'USR001', nama_role: 'Kasubag Protokol' }
         };
         res = {
